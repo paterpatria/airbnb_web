@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Airbnb Adresse-søger</title>
+    
+    <!-- Eksterne biblioteker (Leaflet CSS) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- Vores eget design -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Sektion til søgning og knapper -->
+    <div id="controls">
+        <div id="search-container">
+            <input type="text" id="address-search" placeholder="Søg efter en adresse i København..." autocomplete="off">
+            <div id="autocomplete-results"></div>
+        </div>
+        <button id="download-btn">Download lokale Airbnb'er (CSV)</button>
+    </div>
+
+    <!-- Container til selve kortet -->
+    <div id="map"></div>
+
+    <!-- Eksterne biblioteker (Leaflet JS & PapaParse) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Vores egen logik -->
+    <script src="script.js"></script>
+</body>
+</html>
