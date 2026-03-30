@@ -213,13 +213,22 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 // 5. Download funktion
 document.getElementById('download-btn').onclick = () => {
     if (nearbyListings.length === 0) return;
-    const csv = Papa.unparse(nearbyListings);
+
+    // Tilføj en ekstra kolonne med direkte link til Airbnb før eksport
+    const dataWithLinks = nearbyListings.map(listing => ({
+        ...listing,
+        airbnb_link: `https://www.airbnb.com/rooms/${listing.id}`
+    }));
+
+    const csv = Papa.unparse(dataWithLinks);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = "airbnb_lokale_resultater.csv";
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
 };
 
 // Luk menu hvis man klikker væk
