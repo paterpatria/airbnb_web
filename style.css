@@ -66,9 +66,10 @@ body {
     border-bottom: none;
 }
 
-.autocomplete-item:hover {
+.autocomplete-item:hover, .autocomplete-item.active {
     background: #f8f9fa;
     color: #007bff;
+    outline: none;
 }
 
 #radius-container {

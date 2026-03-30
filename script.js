@@ -20,8 +20,12 @@ let nearbyListings = [];
 let allListings = [];
 let currentSearchCoords = null; // Gemmer [lat, lon] for den aktuelle søgning
 let markersById = new Map(); // Gemmer markører for hurtig adgang via ID
+let focusedIndex = -1; // Til tastaturnavigation i søgeforslag
+let currentResults = []; // Gemmer aktuelle API resultater
 
 // UI Elementer
+const searchInput = document.getElementById('address-search');
+const resultsContainer = document.getElementById('autocomplete-results');
 const radiusSlider = document.getElementById('radius-slider');
 const radiusValueDisplay = document.getElementById('radius-value');
 const statusMessage = document.getElementById('status-message');
@@ -32,7 +36,6 @@ radiusSlider.addEventListener('input', (e) => {
     const newRadius = e.target.value;
     radiusValueDisplay.textContent = newRadius;
     
-    // Hvis vi allerede har søgt på en adresse, så opdater filteret med det samme
     if (currentSearchCoords) {
         filterListings(currentSearchCoords[0], currentSearchCoords[1]);
     }
@@ -55,33 +58,65 @@ Papa.parse('listings.csv', {
 });
 
 // 3. Adressesøgning og Autocomplete
-const searchInput = document.getElementById('address-search');
-const resultsContainer = document.getElementById('autocomplete-results');
-
 searchInput.addEventListener('input', async (e) => {
     const query = e.target.value;
     if (query.length < 3) {
         resultsContainer.style.display = 'none';
+        focusedIndex = -1;
         return;
     }
 
     try {
-        const response = await fetch(`https://api.dataforsyningen.dk/adresser/autocomplete?q=${encodeURIComponent(query)}`);
-        const data = await response.json();
-        displayAutocompleteResults(data);
+        // Skiftet til adgangsadresser for at undgå etage/dør detaljer
+        const response = await fetch(`https://api.dataforsyningen.dk/adgangsadresser/autocomplete?q=${encodeURIComponent(query)}`);
+        currentResults = await response.json();
+        displayAutocompleteResults(currentResults);
     } catch (error) {
         console.error("API Fejl:", error);
     }
 });
 
+// Håndtering af piletaster og Enter
+searchInput.addEventListener('keydown', (e) => {
+    const items = resultsContainer.getElementsByClassName('autocomplete-item');
+    if (items.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedIndex = (focusedIndex + 1) % items.length;
+        updateFocus(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusedIndex = (focusedIndex - 1 + items.length) % items.length;
+        updateFocus(items);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (focusedIndex > -1) {
+            selectAddress(currentResults[focusedIndex]);
+        }
+    }
+});
+
+function updateFocus(items) {
+    for (let i = 0; i < items.length; i++) {
+        items[i].classList.remove('active');
+    }
+    if (focusedIndex > -1) {
+        items[focusedIndex].classList.add('active');
+        items[focusedIndex].scrollIntoView({ block: 'nearest' });
+    }
+}
+
 function displayAutocompleteResults(data) {
     resultsContainer.innerHTML = '';
+    focusedIndex = -1;
+
     if (data.length === 0) {
         resultsContainer.style.display = 'none';
         return;
     }
 
-    data.forEach(item => {
+    data.forEach((item, index) => {
         const div = document.createElement('div');
         div.className = 'autocomplete-item';
         div.textContent = item.tekst;
@@ -92,17 +127,20 @@ function displayAutocompleteResults(data) {
 }
 
 async function selectAddress(item) {
+    if (!item) return;
     searchInput.value = item.tekst;
     resultsContainer.style.display = 'none';
+    focusedIndex = -1;
 
     try {
-        const response = await fetch(item.adresse.href);
+        // Henter detaljer for adgangsadressen
+        const response = await fetch(item.adgangsadresse.href);
         const addressData = await response.json();
-        const [lon, lat] = addressData.adgangsadresse.adgangspunkt.koordinater;
         
-        // Gem koordinaterne globalt
+        // Adgangsadresser API har koordinater direkte i adgangspunkt
+        const [lon, lat] = addressData.adgangspunkt.koordinater;
+        
         currentSearchCoords = [lat, lon];
-        
         processNewLocation(lat, lon);
     } catch (error) {
         console.error("Fejl ved hentning af koordinater:", error);
