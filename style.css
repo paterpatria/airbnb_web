@@ -120,6 +120,23 @@ body {
     border-bottom: 1px solid #ddd;
     font-weight: bold;
     font-size: 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#sort-select {
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+    outline: none;
+    cursor: pointer;
+    background: white;
+}
+
+#sort-select:focus {
+    border-color: #007bff;
 }
 
 #listing-list {

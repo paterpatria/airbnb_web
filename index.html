@@ -33,7 +33,16 @@
     <!-- Main content område med sidepanel og kort -->
     <div id="main-content">
         <div id="sidebar">
-            <div id="sidebar-header">Resultater</div>
+            <div id="sidebar-header">
+                <span>Resultater</span>
+                <select id="sort-select">
+                    <option value="last_review">Sidste anmeldelse</option>
+                    <option value="price_asc">Pris (lavest først)</option>
+                    <option value="number_of_reviews">Flest anmeldelser</option>
+                    <option value="host_name">Værtsnavn (A-Å)</option>
+                    <option value="availability_365">Højest tilgængelighed</option>
+                </select>
+            </div>
             <div id="listing-list">
                 <p style="padding: 20px; color: #666;">Søg på en adresse for at se lejemål her...</p>
             </div>

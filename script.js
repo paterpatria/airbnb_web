@@ -40,8 +40,17 @@ const statusMessage = document.getElementById('status-message');
 const listingList = document.getElementById('listing-list');
 const imagePreview = document.getElementById('image-preview');
 const previewImg = document.getElementById('preview-img');
+const sortSelect = document.getElementById('sort-select');
 
-// 1.1 Håndtering af billede-preview ved hover
+// 1.1 Hjælpefunktion til at rense pris (f.eks. "$1,200.00" -> 1200)
+function parsePrice(price) {
+    if (typeof price === 'number') return price;
+    if (!price) return 0;
+    // Fjerner $, kommaer og andet der ikke er tal eller punktum
+    return parseFloat(price.toString().replace(/[^\d.]/g, '')) || 0;
+}
+
+// 1.2 Håndtering af billede-preview ved hover
 function showPreview(url) {
     if (!url) return;
     previewImg.src = url;
@@ -57,6 +66,13 @@ function hidePreview() {
 radiusSlider.addEventListener('input', (e) => {
     const newRadius = e.target.value;
     radiusValueDisplay.textContent = newRadius;
+    if (currentSearchCoords) {
+        filterListings(currentSearchCoords[0], currentSearchCoords[1]);
+    }
+});
+
+// Event listener for sortering
+sortSelect.addEventListener('change', () => {
     if (currentSearchCoords) {
         filterListings(currentSearchCoords[0], currentSearchCoords[1]);
     }
@@ -180,11 +196,23 @@ function filterListings(targetLat, targetLon) {
         return dist <= radiusInMeters;
     });
 
+    // Dynamisk sortering baseret på dropdown valg
+    const sortBy = sortSelect.value;
     nearbyListings.sort((a, b) => {
-        const dateA = a.last_review ? new Date(a.last_review) : new Date(0);
-        const dateB = b.last_review ? new Date(b.last_review) : new Date(0);
-        if (dateB.getTime() !== dateA.getTime()) return dateB - dateA;
-        return (b.availability_365 || 0) - (a.availability_365 || 0);
+        if (sortBy === 'last_review') {
+            const dateA = a.last_review ? new Date(a.last_review) : new Date(0);
+            const dateB = b.last_review ? new Date(b.last_review) : new Date(0);
+            return dateB - dateA;
+        } else if (sortBy === 'price_asc') {
+            return parsePrice(a.price) - parsePrice(b.price);
+        } else if (sortBy === 'number_of_reviews') {
+            return (b.number_of_reviews || 0) - (a.number_of_reviews || 0);
+        } else if (sortBy === 'host_name') {
+            return (a.host_name || '').localeCompare(b.host_name || '');
+        } else if (sortBy === 'availability_365') {
+            return (b.availability_365 || 0) - (a.availability_365 || 0);
+        }
+        return 0;
     });
 
     if (nearbyListings.length === 0) {
@@ -200,7 +228,7 @@ function filterListings(targetLat, targetLon) {
         const marker = L.circleMarker([listing.latitude, listing.longitude], {
             color: 'blue', fillColor: '#30f', fillOpacity: 0.5, radius: 7
         });
-        // Lav HTML til popup med billede og vært
+        
         const imageHTML = listing.picture_url ? `<img src="${listing.picture_url}" class="popup-img">` : '';
         const popupHTML = `
             <div class="info-popup">
@@ -215,7 +243,6 @@ function filterListings(targetLat, targetLon) {
         listingMarkers.addLayer(marker);
         markersById.set(listing.id, marker);
 
-        // 2. Opret element i sidepanelet
         const item = document.createElement('div');
         item.className = 'listing-item';
         const reviewText = listing.last_review ? `Sidste anm: ${listing.last_review}` : 'Ingen anmeldelser';
@@ -225,7 +252,6 @@ function filterListings(targetLat, targetLon) {
             <p>${listing.room_type} • ${reviewText}</p>
             <span class="price">${listing.price} DKK / nat</span>
         `;
-
         item.onclick = () => zoomToListing(listing.id);
         item.onmouseenter = () => showPreview(listing.picture_url);
         item.onmouseleave = () => hidePreview();
