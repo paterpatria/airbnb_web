@@ -18,6 +18,25 @@ let addressMarker = null;
 let listingMarkers = L.layerGroup().addTo(map);
 let nearbyListings = [];
 let allListings = [];
+let currentSearchCoords = null; // Gemmer [lat, lon] for den aktuelle søgning
+let markersById = new Map(); // Gemmer markører for hurtig adgang via ID
+
+// UI Elementer
+const radiusSlider = document.getElementById('radius-slider');
+const radiusValueDisplay = document.getElementById('radius-value');
+const statusMessage = document.getElementById('status-message');
+const listingList = document.getElementById('listing-list');
+
+// Event listener for radius-slider
+radiusSlider.addEventListener('input', (e) => {
+    const newRadius = e.target.value;
+    radiusValueDisplay.textContent = newRadius;
+    
+    // Hvis vi allerede har søgt på en adresse, så opdater filteret med det samme
+    if (currentSearchCoords) {
+        filterListings(currentSearchCoords[0], currentSearchCoords[1]);
+    }
+});
 
 // 2. Hent Airbnb-data når siden loader
 console.log("Henter listings.csv...");
@@ -80,6 +99,10 @@ async function selectAddress(item) {
         const response = await fetch(item.adresse.href);
         const addressData = await response.json();
         const [lon, lat] = addressData.adgangsadresse.adgangspunkt.koordinater;
+        
+        // Gem koordinaterne globalt
+        currentSearchCoords = [lat, lon];
+        
         processNewLocation(lat, lon);
     } catch (error) {
         console.error("Fejl ved hentning af koordinater:", error);
@@ -104,15 +127,28 @@ function processNewLocation(lat, lon) {
 }
 
 function filterListings(targetLat, targetLon) {
-    const radiusInMeters = 300;
+    const radiusInMeters = parseInt(radiusSlider.value);
     listingMarkers.clearLayers();
+    listingList.innerHTML = ''; // Ryd listen i sidepanelet
+    markersById.clear();
 
     nearbyListings = allListings.filter(listing => {
         const dist = calculateDistance(targetLat, targetLon, listing.latitude, listing.longitude);
         return dist <= radiusInMeters;
     });
 
+    // Opdater statusbesked
+    if (nearbyListings.length === 0) {
+        statusMessage.textContent = `Ingen lejemål fundet inden for ${radiusInMeters}m.`;
+        statusMessage.style.color = '#dc3545';
+        listingList.innerHTML = '<p style="padding: 20px; color: #666;">Ingen resultater i dette område.</p>';
+    } else {
+        statusMessage.textContent = `Fundet ${nearbyListings.length} lejemål inden for ${radiusInMeters}m.`;
+        statusMessage.style.color = '#28a745';
+    }
+
     nearbyListings.forEach(listing => {
+        // 1. Opret markør på kortet
         const marker = L.circleMarker([listing.latitude, listing.longitude], {
             color: 'blue',
             fillColor: '#30f',
@@ -130,10 +166,32 @@ function filterListings(targetLat, targetLon) {
         `;
         marker.bindPopup(popupHTML);
         listingMarkers.addLayer(marker);
+        
+        // Gem markør i vores Map så vi kan finde den via ID
+        markersById.set(listing.id, marker);
+
+        // 2. Opret element i sidepanelet
+        const item = document.createElement('div');
+        item.className = 'listing-item';
+        item.innerHTML = `
+            <h3>${listing.name || 'Airbnb lejemål'}</h3>
+            <p>${listing.room_type} • ${listing.neighbourhood || ''}</p>
+            <span class="price">${listing.price} DKK / nat</span>
+        `;
+        item.onclick = () => zoomToListing(listing.id);
+        listingList.appendChild(item);
     });
 
     // Vis download-knap
     document.getElementById('download-btn').style.display = nearbyListings.length > 0 ? 'block' : 'none';
+}
+
+function zoomToListing(id) {
+    const marker = markersById.get(id);
+    if (marker) {
+        map.setView(marker.getLatLng(), 18);
+        marker.openPopup();
+    }
 }
 
 // Haversine formel til afstandsberegning

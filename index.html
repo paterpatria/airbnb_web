@@ -19,11 +19,27 @@
             <input type="text" id="address-search" placeholder="Søg efter en adresse i København..." autocomplete="off">
             <div id="autocomplete-results"></div>
         </div>
-        <button id="download-btn">Download lokale Airbnb'er (CSV)</button>
+        
+        <div id="radius-container">
+            <label for="radius-slider">Radius: <span id="radius-value">300</span>m</label>
+            <input type="range" id="radius-slider" min="100" max="2000" step="25" value="300">
+        </div>
+
+        <div id="status-message">Indtast en adresse for at starte</div>
+        
+        <button id="download-btn">Download CSV</button>
     </div>
 
-    <!-- Container til selve kortet -->
-    <div id="map"></div>
+    <!-- Main content område med sidepanel og kort -->
+    <div id="main-content">
+        <div id="sidebar">
+            <div id="sidebar-header">Resultater</div>
+            <div id="listing-list">
+                <p style="padding: 20px; color: #666;">Søg på en adresse for at se lejemål her...</p>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
 
     <!-- Eksterne biblioteker (Leaflet JS & PapaParse) -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
