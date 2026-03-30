@@ -15,16 +15,15 @@ body {
     background: white;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     display: grid;
-    /* Præcis opdeling: Søgefelt (400px), Mellemrum (indbygget i gap), Slider (200px), resten auto */
     grid-template-columns: 400px 200px 1fr auto;
-    gap: 50px; /* Stor afstand mellem elementerne */
+    gap: 50px;
     align-items: center;
     z-index: 1000;
 }
 
 #search-container {
     position: relative;
-    width: 400px; /* Fast bredde for at undgå overlap */
+    width: 400px;
 }
 
 #address-search {
@@ -35,7 +34,7 @@ body {
     border-radius: 8px;
     outline: none;
     transition: border-color 0.3s;
-    box-sizing: border-box; /* Sikrer at padding ikke øger bredden */
+    box-sizing: border-box;
 }
 
 #address-search:focus {
@@ -62,14 +61,9 @@ body {
     border-bottom: 1px solid #f0f0f0;
 }
 
-.autocomplete-item:last-child {
-    border-bottom: none;
-}
-
 .autocomplete-item:hover, .autocomplete-item.active {
     background: #f8f9fa;
     color: #007bff;
-    outline: none;
 }
 
 #radius-container {
@@ -82,7 +76,6 @@ body {
     font-size: 14px;
     margin-bottom: 5px;
     font-weight: bold;
-    color: #333;
 }
 
 #radius-slider {
@@ -104,18 +97,6 @@ body {
     border-radius: 8px;
     font-weight: bold;
     cursor: pointer;
-    transition: background 0.3s;
-    display: none;
-    white-space: nowrap;
-}
-
-#download-btn:hover {
-    background: #218838;
-}
-
-#map {
-    flex-grow: 1;
-    height: 100%;
 }
 
 #main-content {
@@ -139,7 +120,6 @@ body {
     border-bottom: 1px solid #ddd;
     font-weight: bold;
     font-size: 18px;
-    color: #333;
 }
 
 #listing-list {
@@ -150,7 +130,6 @@ body {
     padding: 15px 20px;
     border-bottom: 1px solid #eee;
     cursor: pointer;
-    transition: background 0.2s;
 }
 
 .listing-item:hover {
@@ -176,11 +155,22 @@ body {
     display: block;
 }
 
-/* Preview-billede styling - Fast placeret øverst til venstre INDE i kortområdet */
+/* NY KORT-CONTAINER LOGIK */
+#map-container {
+    flex-grow: 1;
+    position: relative; /* Anker for absolute elementer som preview */
+    overflow: hidden;
+}
+
+#map {
+    width: 100%;
+    height: 100%;
+}
+
 #image-preview {
     position: absolute;
-    top: 100px; /* Øget fra 20px */
-    left: 370px; /* Sidebar bredde (350px) + 20px luft */
+    top: 20px;
+    left: 20px;
     z-index: 2000;
     display: none;
     background: white;
@@ -188,8 +178,7 @@ body {
     box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     overflow: hidden;
     width: 320px;
-    border: none;
-    transition: opacity 0.3s;
+    pointer-events: none;
 }
 
 #preview-img {
@@ -199,22 +188,10 @@ body {
     object-fit: cover;
 }
 
-/* Sørg for at main-content er relativ, så absolute position virker korrekt */
-#main-content {
-    display: flex;
-    flex-grow: 1;
-    overflow: hidden;
-    position: relative; /* Tilføjet */
-}
-
-/* Styling til popup-vinduer på kortet */
+/* Popups på kortet */
 .info-popup {
     font-size: 14px;
     line-height: 1.5;
-}
-
-.info-popup b {
-    color: #333;
 }
 
 .info-popup a {
@@ -225,9 +202,4 @@ body {
     color: white !important;
     border-radius: 4px;
     text-decoration: none;
-    font-size: 12px;
-}
-
-.info-popup a:hover {
-    background: #e31c5f;
 }
