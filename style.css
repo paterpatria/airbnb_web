@@ -192,6 +192,16 @@ body {
 .info-popup {
     font-size: 14px;
     line-height: 1.5;
+    min-width: 200px;
+}
+
+.popup-img {
+    width: 100%;
+    height: 130px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    display: block;
 }
 
 .info-popup a {

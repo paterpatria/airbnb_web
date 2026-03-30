@@ -200,8 +200,12 @@ function filterListings(targetLat, targetLon) {
         const marker = L.circleMarker([listing.latitude, listing.longitude], {
             color: 'blue', fillColor: '#30f', fillOpacity: 0.5, radius: 7
         });
+        
+        // Lav HTML til popup med billede
+        const imageHTML = listing.picture_url ? `<img src="${listing.picture_url}" class="popup-img">` : '';
         const popupHTML = `
             <div class="info-popup">
+                ${imageHTML}
                 <b>${listing.name || 'Airbnb'}</b><br>
                 Pris: ${listing.price} DKK<br>
                 Sidste anm: ${listing.last_review || 'Ingen'}<br>
