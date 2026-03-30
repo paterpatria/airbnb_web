@@ -31,6 +31,31 @@ const radiusSlider = document.getElementById('radius-slider');
 const radiusValueDisplay = document.getElementById('radius-value');
 const statusMessage = document.getElementById('status-message');
 const listingList = document.getElementById('listing-list');
+const imagePreview = document.getElementById('image-preview');
+const previewImg = document.getElementById('preview-img');
+
+// 1.1 Håndtering af billede-preview ved hover
+function showPreview(url, e) {
+    if (!url) {
+        console.log("Ingen billede-URL fundet for dette lejemål.");
+        return;
+    }
+    console.log("Viser preview for:", url);
+    previewImg.src = url;
+    imagePreview.style.display = 'block';
+    movePreview(e);
+}
+
+function movePreview(e) {
+    // Placer billedet 20px til højre og 20px nede fra musen
+    imagePreview.style.left = (e.clientX + 20) + 'px';
+    imagePreview.style.top = (e.clientY + 20) + 'px';
+}
+
+function hidePreview() {
+    imagePreview.style.display = 'none';
+    previewImg.src = '';
+}
 
 // Event listener for radius-slider
 radiusSlider.addEventListener('input', (e) => {
@@ -248,7 +273,15 @@ function filterListings(targetLat, targetLon) {
             <p>${listing.room_type} • ${reviewText}</p>
             <span class="price">${listing.price} DKK / nat</span>
         `;
+        
+        // Klik for at zoome på kortet
         item.onclick = () => zoomToListing(listing.id);
+        
+        // Hover for at se billede
+        item.onmouseenter = (e) => showPreview(listing.picture_url, e);
+        item.onmousemove = (e) => movePreview(e);
+        item.onmouseleave = () => hidePreview();
+        
         listingList.appendChild(item);
     });
 
