@@ -176,26 +176,35 @@ body {
     display: block;
 }
 
-/* Preview-billede styling */
+/* Preview-billede styling - Fast placeret øverst til venstre INDE i kortområdet */
 #image-preview {
-    position: fixed;
-    pointer-events: none;
-    z-index: 9999; /* Meget højere z-index */
+    position: absolute;
+    top: 100px; /* Øget fra 20px */
+    left: 370px; /* Sidebar bredde (350px) + 20px luft */
+    z-index: 2000;
     display: none;
     background: white;
     border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     overflow: hidden;
-    border: 3px solid #ff385c; /* Airbnb rød ramme */
-    width: 300px; /* Fast bredde */
-    min-height: 200px; /* Sikrer at vi ser noget selvom billedet loader */
+    width: 320px;
+    border: none;
+    transition: opacity 0.3s;
 }
 
 #preview-img {
     display: block;
     width: 100%;
-    height: auto;
+    height: 200px;
     object-fit: cover;
+}
+
+/* Sørg for at main-content er relativ, så absolute position virker korrekt */
+#main-content {
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden;
+    position: relative; /* Tilføjet */
 }
 
 /* Styling til popup-vinduer på kortet */

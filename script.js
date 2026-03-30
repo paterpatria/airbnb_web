@@ -2,12 +2,19 @@
  * FORMÅL: Håndterer al interaktiv logik på siden.
  * - Initialisering af kort
  * - Hentning af adresser fra API
- * - Indlæsning og filtrering af CSV-data
- * - Afstandsberegninger
+ * - Indlæsning, sortering og filtrering af CSV-data
+ * - Visning af billede-preview
  */
 
 // 1. Initialisering af kortet
-const map = L.map('map').setView([55.6761, 12.5683], 13);
+const map = L.map('map', {
+    zoomControl: false // Deaktiver standard zoom knapper
+}).setView([55.6761, 12.5683], 13);
+
+// Tilføj zoom knapper nederst til højre i stedet
+L.control.zoom({
+    position: 'bottomright'
+}).addTo(map);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> bidragydere'
@@ -15,14 +22,14 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 // Globale tilstande
 let addressMarker = null;
-let radiusCircle = null; // Til den visuelle radius
+let radiusCircle = null;
 let listingMarkers = L.layerGroup().addTo(map);
 let nearbyListings = [];
 let allListings = [];
-let currentSearchCoords = null; // Gemmer [lat, lon] for den aktuelle søgning
-let markersById = new Map(); // Gemmer markører for hurtig adgang via ID
-let focusedIndex = -1; // Til tastaturnavigation i søgeforslag
-let currentResults = []; // Gemmer aktuelle API resultater
+let currentSearchCoords = null;
+let markersById = new Map();
+let focusedIndex = -1;
+let currentResults = [];
 
 // UI Elementer
 const searchInput = document.getElementById('address-search');
@@ -35,21 +42,10 @@ const imagePreview = document.getElementById('image-preview');
 const previewImg = document.getElementById('preview-img');
 
 // 1.1 Håndtering af billede-preview ved hover
-function showPreview(url, e) {
-    if (!url) {
-        console.log("Ingen billede-URL fundet for dette lejemål.");
-        return;
-    }
-    console.log("Viser preview for:", url);
+function showPreview(url) {
+    if (!url) return;
     previewImg.src = url;
     imagePreview.style.display = 'block';
-    movePreview(e);
-}
-
-function movePreview(e) {
-    // Placer billedet 20px til højre og 20px nede fra musen
-    imagePreview.style.left = (e.clientX + 20) + 'px';
-    imagePreview.style.top = (e.clientY + 20) + 'px';
 }
 
 function hidePreview() {
@@ -61,14 +57,12 @@ function hidePreview() {
 radiusSlider.addEventListener('input', (e) => {
     const newRadius = e.target.value;
     radiusValueDisplay.textContent = newRadius;
-    
     if (currentSearchCoords) {
         filterListings(currentSearchCoords[0], currentSearchCoords[1]);
     }
 });
 
 // 2. Hent Airbnb-data når siden loader
-console.log("Henter listings.csv...");
 Papa.parse('listings.csv', {
     download: true,
     header: true,
@@ -79,7 +73,6 @@ Papa.parse('listings.csv', {
     },
     error: function(err) {
         console.error("Fejl ved indlæsning af CSV:", err);
-        alert("Fejl: Kunne ikke indlæse listings.csv. Husk at køre en lokal server.");
     }
 });
 
@@ -91,9 +84,7 @@ searchInput.addEventListener('input', async (e) => {
         focusedIndex = -1;
         return;
     }
-
     try {
-        // Skiftet til adgangsadresser for at undgå etage/dør detaljer
         const response = await fetch(`https://api.dataforsyningen.dk/adgangsadresser/autocomplete?q=${encodeURIComponent(query)}`);
         currentResults = await response.json();
         displayAutocompleteResults(currentResults);
@@ -102,11 +93,9 @@ searchInput.addEventListener('input', async (e) => {
     }
 });
 
-// Håndtering af piletaster og Enter
 searchInput.addEventListener('keydown', (e) => {
     const items = resultsContainer.getElementsByClassName('autocomplete-item');
     if (items.length === 0) return;
-
     if (e.key === 'ArrowDown') {
         e.preventDefault();
         focusedIndex = (focusedIndex + 1) % items.length;
@@ -117,16 +106,12 @@ searchInput.addEventListener('keydown', (e) => {
         updateFocus(items);
     } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (focusedIndex > -1) {
-            selectAddress(currentResults[focusedIndex]);
-        }
+        if (focusedIndex > -1) selectAddress(currentResults[focusedIndex]);
     }
 });
 
 function updateFocus(items) {
-    for (let i = 0; i < items.length; i++) {
-        items[i].classList.remove('active');
-    }
+    for (let i = 0; i < items.length; i++) items[i].classList.remove('active');
     if (focusedIndex > -1) {
         items[focusedIndex].classList.add('active');
         items[focusedIndex].scrollIntoView({ block: 'nearest' });
@@ -136,13 +121,11 @@ function updateFocus(items) {
 function displayAutocompleteResults(data) {
     resultsContainer.innerHTML = '';
     focusedIndex = -1;
-
     if (data.length === 0) {
         resultsContainer.style.display = 'none';
         return;
     }
-
-    data.forEach((item, index) => {
+    data.forEach((item) => {
         const div = document.createElement('div');
         div.className = 'autocomplete-item';
         div.textContent = item.tekst;
@@ -156,16 +139,10 @@ async function selectAddress(item) {
     if (!item) return;
     searchInput.value = item.tekst;
     resultsContainer.style.display = 'none';
-    focusedIndex = -1;
-
     try {
-        // Henter detaljer for adgangsadressen
         const response = await fetch(item.adgangsadresse.href);
         const addressData = await response.json();
-        
-        // Adgangsadresser API har koordinater direkte i adgangspunkt
         const [lon, lat] = addressData.adgangspunkt.koordinater;
-        
         currentSearchCoords = [lat, lon];
         processNewLocation(lat, lon);
     } catch (error) {
@@ -175,44 +152,27 @@ async function selectAddress(item) {
 
 // 4. Kortopdatering og Filtrering
 function processNewLocation(lat, lon) {
-    // Zoom og rød prik
     map.setView([lat, lon], 16);
-    
-    // Ryd tidligere markør og cirkel
     if (addressMarker) map.removeLayer(addressMarker);
     if (radiusCircle) map.removeLayer(radiusCircle);
     
     addressMarker = L.circleMarker([lat, lon], {
-        color: 'red',
-        fillColor: '#f03',
-        fillOpacity: 0.6,
-        radius: 12,
-        zIndexOffset: 1000
+        color: 'red', fillColor: '#f03', fillOpacity: 0.6, radius: 12, zIndexOffset: 1000
     }).addTo(map).bindPopup(`<b>Valgt adresse:</b><br>${searchInput.value}`).openPopup();
 
-    // Opret visuel radius cirkel
     radiusCircle = L.circle([lat, lon], {
-        color: '#007bff',
-        fillColor: '#007bff',
-        fillOpacity: 0.1,
-        weight: 2,
-        radius: parseInt(radiusSlider.value)
+        color: '#007bff', fillColor: '#007bff', fillOpacity: 0.1, weight: 2, radius: parseInt(radiusSlider.value)
     }).addTo(map);
 
-    // Find og vis nærliggende Airbnb'er
     filterListings(lat, lon);
 }
 
 function filterListings(targetLat, targetLon) {
     const radiusInMeters = parseInt(radiusSlider.value);
-    
-    // Opdater den visuelle cirkels radius
-    if (radiusCircle) {
-        radiusCircle.setRadius(radiusInMeters);
-    }
+    if (radiusCircle) radiusCircle.setRadius(radiusInMeters);
 
     listingMarkers.clearLayers();
-    listingList.innerHTML = ''; // Ryd listen i sidepanelet
+    listingList.innerHTML = '';
     markersById.clear();
 
     nearbyListings = allListings.filter(listing => {
@@ -220,72 +180,47 @@ function filterListings(targetLat, targetLon) {
         return dist <= radiusInMeters;
     });
 
-    // Sortering: Nyeste anmeldelse først, derefter højeste tilgængelighed
     nearbyListings.sort((a, b) => {
         const dateA = a.last_review ? new Date(a.last_review) : new Date(0);
         const dateB = b.last_review ? new Date(b.last_review) : new Date(0);
-        
-        if (dateB.getTime() !== dateA.getTime()) {
-            return dateB - dateA;
-        }
+        if (dateB.getTime() !== dateA.getTime()) return dateB - dateA;
         return (b.availability_365 || 0) - (a.availability_365 || 0);
     });
 
-    // Opdater statusbesked
     if (nearbyListings.length === 0) {
         statusMessage.textContent = `Ingen lejemål fundet inden for ${radiusInMeters}m.`;
         statusMessage.style.color = '#dc3545';
-        listingList.innerHTML = '<p style="padding: 20px; color: #666;">Ingen resultater i dette område.</p>';
+        listingList.innerHTML = '<p style="padding: 20px; color: #666;">Ingen resultater.</p>';
     } else {
         statusMessage.textContent = `Fundet ${nearbyListings.length} lejemål inden for ${radiusInMeters}m.`;
         statusMessage.style.color = '#28a745';
     }
 
     nearbyListings.forEach(listing => {
-        // 1. Opret markør på kortet
         const marker = L.circleMarker([listing.latitude, listing.longitude], {
-            color: 'blue',
-            fillColor: '#30f',
-            fillOpacity: 0.5,
-            radius: 7
+            color: 'blue', fillColor: '#30f', fillOpacity: 0.5, radius: 7
         });
-
         const popupHTML = `
             <div class="info-popup">
                 <b>${listing.name || 'Airbnb'}</b><br>
                 Pris: ${listing.price} DKK<br>
                 Sidste anm: ${listing.last_review || 'Ingen'}<br>
                 <a href="https://www.airbnb.com/rooms/${listing.id}" target="_blank">Se på Airbnb.dk</a>
-            </div>
-        `;
+            </div>`;
         marker.bindPopup(popupHTML);
         listingMarkers.addLayer(marker);
-        
-        // Gem markør i vores Map så vi kan finde den via ID
         markersById.set(listing.id, marker);
 
-        // 2. Opret element i sidepanelet
         const item = document.createElement('div');
         item.className = 'listing-item';
         const reviewText = listing.last_review ? `Sidste anm: ${listing.last_review}` : 'Ingen anmeldelser';
-        item.innerHTML = `
-            <h3>${listing.name || 'Airbnb lejemål'}</h3>
-            <p>${listing.room_type} • ${reviewText}</p>
-            <span class="price">${listing.price} DKK / nat</span>
-        `;
-        
-        // Klik for at zoome på kortet
+        item.innerHTML = `<h3>${listing.name || 'Airbnb'}</h3><p>${listing.room_type} • ${reviewText}</p><span class="price">${listing.price} DKK / nat</span>`;
         item.onclick = () => zoomToListing(listing.id);
-        
-        // Hover for at se billede
-        item.onmouseenter = (e) => showPreview(listing.picture_url, e);
-        item.onmousemove = (e) => movePreview(e);
+        item.onmouseenter = () => showPreview(listing.picture_url);
         item.onmouseleave = () => hidePreview();
-        
         listingList.appendChild(item);
     });
 
-    // Vis download-knap
     document.getElementById('download-btn').style.display = nearbyListings.length > 0 ? 'block' : 'none';
 }
 
@@ -297,54 +232,31 @@ function zoomToListing(id) {
     }
 }
 
-// Haversine formel til afstandsberegning
 function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371e3; // Jordens radius
+    const R = 6371e3;
     const p1 = lat1 * Math.PI/180;
     const p2 = lat2 * Math.PI/180;
     const dp = (lat2-lat1) * Math.PI/180;
     const dl = (lon2-lon1) * Math.PI/180;
-
-    const a = Math.sin(dp/2) * Math.sin(dp/2) +
-              Math.cos(p1) * Math.cos(p2) *
-              Math.sin(dl/2) * Math.sin(dl/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-    return R * c;
+    const a = Math.sin(dp/2) * Math.sin(dp/2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl/2) * Math.sin(dl/2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
 
-// 5. Download funktion
 document.getElementById('download-btn').onclick = () => {
     if (nearbyListings.length === 0) return;
-
-    // Opret data hvor airbnb_link er den FØRSTE kolonne
     const dataWithLinks = nearbyListings.map(listing => {
-        const sortedListing = {
-            airbnb_link: `https://www.airbnb.com/rooms/${listing.id}`
-        };
-        // Kopier alle andre felter ind efter linket
+        const sortedListing = { airbnb_link: `https://www.airbnb.com/rooms/${listing.id}` };
         return Object.assign(sortedListing, listing);
     });
-
     const csv = Papa.unparse(dataWithLinks);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    
-    // Lav et pænt filnavn baseret på adressen
     const addressPrefix = searchInput.value.replace(/[/\\?%*:|"<>\s]/g, '_').substring(0, 50);
-    const fileName = `${addressPrefix}_airbnb_resultater.csv`;
-
     const link = document.createElement("a");
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = `${addressPrefix}_airbnb_resultater.csv`;
     link.click();
-    document.body.removeChild(link);
 };
 
-// Luk menu hvis man klikker væk
 window.onclick = (e) => {
-    if (!e.target.matches('#address-search')) {
-        resultsContainer.style.display = 'none';
-    }
+    if (!e.target.matches('#address-search')) resultsContainer.style.display = 'none';
 };
