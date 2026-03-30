@@ -195,6 +195,17 @@ function filterListings(targetLat, targetLon) {
         return dist <= radiusInMeters;
     });
 
+    // Sortering: Nyeste anmeldelse først, derefter højeste tilgængelighed
+    nearbyListings.sort((a, b) => {
+        const dateA = a.last_review ? new Date(a.last_review) : new Date(0);
+        const dateB = b.last_review ? new Date(b.last_review) : new Date(0);
+        
+        if (dateB.getTime() !== dateA.getTime()) {
+            return dateB - dateA;
+        }
+        return (b.availability_365 || 0) - (a.availability_365 || 0);
+    });
+
     // Opdater statusbesked
     if (nearbyListings.length === 0) {
         statusMessage.textContent = `Ingen lejemål fundet inden for ${radiusInMeters}m.`;
@@ -218,7 +229,7 @@ function filterListings(targetLat, targetLon) {
             <div class="info-popup">
                 <b>${listing.name || 'Airbnb'}</b><br>
                 Pris: ${listing.price} DKK<br>
-                Type: ${listing.room_type}<br>
+                Sidste anm: ${listing.last_review || 'Ingen'}<br>
                 <a href="https://www.airbnb.com/rooms/${listing.id}" target="_blank">Se på Airbnb.dk</a>
             </div>
         `;
@@ -231,9 +242,10 @@ function filterListings(targetLat, targetLon) {
         // 2. Opret element i sidepanelet
         const item = document.createElement('div');
         item.className = 'listing-item';
+        const reviewText = listing.last_review ? `Sidste anm: ${listing.last_review}` : 'Ingen anmeldelser';
         item.innerHTML = `
             <h3>${listing.name || 'Airbnb lejemål'}</h3>
-            <p>${listing.room_type} • ${listing.neighbourhood || ''}</p>
+            <p>${listing.room_type} • ${reviewText}</p>
             <span class="price">${listing.price} DKK / nat</span>
         `;
         item.onclick = () => zoomToListing(listing.id);
@@ -272,18 +284,26 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 document.getElementById('download-btn').onclick = () => {
     if (nearbyListings.length === 0) return;
 
-    // Tilføj en ekstra kolonne med direkte link til Airbnb før eksport
-    const dataWithLinks = nearbyListings.map(listing => ({
-        ...listing,
-        airbnb_link: `https://www.airbnb.com/rooms/${listing.id}`
-    }));
+    // Opret data hvor airbnb_link er den FØRSTE kolonne
+    const dataWithLinks = nearbyListings.map(listing => {
+        const sortedListing = {
+            airbnb_link: `https://www.airbnb.com/rooms/${listing.id}`
+        };
+        // Kopier alle andre felter ind efter linket
+        return Object.assign(sortedListing, listing);
+    });
 
     const csv = Papa.unparse(dataWithLinks);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
+    
+    // Lav et pænt filnavn baseret på adressen
+    const addressPrefix = searchInput.value.replace(/[/\\?%*:|"<>\s]/g, '_').substring(0, 50);
+    const fileName = `${addressPrefix}_airbnb_resultater.csv`;
+
     const link = document.createElement("a");
     link.href = url;
-    link.download = "airbnb_lokale_resultater.csv";
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
