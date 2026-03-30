@@ -15,6 +15,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 // Globale tilstande
 let addressMarker = null;
+let radiusCircle = null; // Til den visuelle radius
 let listingMarkers = L.layerGroup().addTo(map);
 let nearbyListings = [];
 let allListings = [];
@@ -151,14 +152,27 @@ async function selectAddress(item) {
 function processNewLocation(lat, lon) {
     // Zoom og rød prik
     map.setView([lat, lon], 16);
+    
+    // Ryd tidligere markør og cirkel
     if (addressMarker) map.removeLayer(addressMarker);
+    if (radiusCircle) map.removeLayer(radiusCircle);
     
     addressMarker = L.circleMarker([lat, lon], {
         color: 'red',
         fillColor: '#f03',
         fillOpacity: 0.6,
-        radius: 12
+        radius: 12,
+        zIndexOffset: 1000
     }).addTo(map).bindPopup(`<b>Valgt adresse:</b><br>${searchInput.value}`).openPopup();
+
+    // Opret visuel radius cirkel
+    radiusCircle = L.circle([lat, lon], {
+        color: '#007bff',
+        fillColor: '#007bff',
+        fillOpacity: 0.1,
+        weight: 2,
+        radius: parseInt(radiusSlider.value)
+    }).addTo(map);
 
     // Find og vis nærliggende Airbnb'er
     filterListings(lat, lon);
@@ -166,6 +180,12 @@ function processNewLocation(lat, lon) {
 
 function filterListings(targetLat, targetLon) {
     const radiusInMeters = parseInt(radiusSlider.value);
+    
+    // Opdater den visuelle cirkels radius
+    if (radiusCircle) {
+        radiusCircle.setRadius(radiusInMeters);
+    }
+
     listingMarkers.clearLayers();
     listingList.innerHTML = ''; // Ryd listen i sidepanelet
     markersById.clear();
