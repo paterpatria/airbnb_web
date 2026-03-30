@@ -200,13 +200,13 @@ function filterListings(targetLat, targetLon) {
         const marker = L.circleMarker([listing.latitude, listing.longitude], {
             color: 'blue', fillColor: '#30f', fillOpacity: 0.5, radius: 7
         });
-        
-        // Lav HTML til popup med billede
+        // Lav HTML til popup med billede og vært
         const imageHTML = listing.picture_url ? `<img src="${listing.picture_url}" class="popup-img">` : '';
         const popupHTML = `
             <div class="info-popup">
                 ${imageHTML}
                 <b>${listing.name || 'Airbnb'}</b><br>
+                Vært: ${listing.host_name || 'Ukendt'}<br>
                 Pris: ${listing.price} DKK<br>
                 Sidste anm: ${listing.last_review || 'Ingen'}<br>
                 <a href="https://www.airbnb.com/rooms/${listing.id}" target="_blank">Se på Airbnb.dk</a>
@@ -215,10 +215,17 @@ function filterListings(targetLat, targetLon) {
         listingMarkers.addLayer(marker);
         markersById.set(listing.id, marker);
 
+        // 2. Opret element i sidepanelet
         const item = document.createElement('div');
         item.className = 'listing-item';
         const reviewText = listing.last_review ? `Sidste anm: ${listing.last_review}` : 'Ingen anmeldelser';
-        item.innerHTML = `<h3>${listing.name || 'Airbnb'}</h3><p>${listing.room_type} • ${reviewText}</p><span class="price">${listing.price} DKK / nat</span>`;
+        item.innerHTML = `
+            <h3>${listing.name || 'Airbnb'}</h3>
+            <p style="font-weight: bold; color: #555; margin-bottom: 5px;">Vært: ${listing.host_name || 'Ukendt'}</p>
+            <p>${listing.room_type} • ${reviewText}</p>
+            <span class="price">${listing.price} DKK / nat</span>
+        `;
+
         item.onclick = () => zoomToListing(listing.id);
         item.onmouseenter = () => showPreview(listing.picture_url);
         item.onmouseleave = () => hidePreview();
