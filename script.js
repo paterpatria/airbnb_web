@@ -25,6 +25,7 @@ let listingMarkers = L.layerGroup().addTo(map);
 let nearbyListings = [];
 let allListings = [];
 let matchedTenants = []; // Gemmer lejere med matches
+let uploadedTenantData = null; // Gemmer den rå lejerliste til dynamisk matching
 let isMatchMode = false; // Toggle for "Alle" vs "Matches"
 let currentSearchCoords = null;
 let markersById = new Map();
@@ -113,20 +114,9 @@ searchInput.addEventListener('input', async (e) => {
 searchInput.addEventListener('keydown', (e) => {
     const items = resultsContainer.getElementsByClassName('autocomplete-item');
     if (items.length === 0) return;
-    if (e.key === 'ArrowDown') { 
-        e.preventDefault(); 
-        focusedIndex = (focusedIndex + 1) % items.length; 
-        updateFocus(items); 
-    }
-    else if (e.key === 'ArrowUp') { 
-        e.preventDefault(); 
-        focusedIndex = (focusedIndex - 1 + items.length) % items.length; 
-        updateFocus(items); 
-    }
-    else if (e.key === 'Enter') { 
-        e.preventDefault(); 
-        if (focusedIndex > -1) selectAddress(currentResults[focusedIndex]); 
-    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); focusedIndex = (focusedIndex + 1) % items.length; updateFocus(items); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); focusedIndex = (focusedIndex - 1 + items.length) % items.length; updateFocus(items); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (focusedIndex > -1) selectAddress(currentResults[focusedIndex]); }
 });
 
 function displayAutocompleteResults(data) {
@@ -177,11 +167,35 @@ function filterListings() {
         return calculateDistance(targetLat, targetLon, listing.latitude, listing.longitude) <= radiusInMeters;
     });
 
+    if (uploadedTenantData) {
+        updateDynamicMatches();
+    }
+
     if (isMatchMode) {
         renderMatchedView();
     } else {
         renderStandardView();
     }
+}
+
+function updateDynamicMatches() {
+    matchedTenants = uploadedTenantData.map(rawRow => {
+        const lejerRow = { ...rawRow };
+        const fullLejerName = (lejerRow['Navn'] || '').toLowerCase();
+        const matches = nearbyListings.filter(airbnb => {
+            const host = (airbnb.host_name || '').toLowerCase();
+            return host && new RegExp(`\\b${host}\\b`, 'i').test(fullLejerName);
+        });
+        lejerRow.matches = matches;
+        matches.forEach((m, i) => lejerRow[`airbnb_listing_${i+1}`] = `https://www.airbnb.com/rooms/${m.id}`);
+        return lejerRow;
+    });
+
+    const allKeys = new Set();
+    matchedTenants.forEach(row => {
+        Object.keys(row).forEach(k => { if (k !== 'matches') allKeys.add(k); });
+    });
+    lastMatchCSV = Papa.unparse({ fields: Array.from(allKeys), data: matchedTenants }, { delimiter: ';' });
 }
 
 function renderStandardView() {
@@ -195,19 +209,12 @@ function renderStandardView() {
     });
 
     statusMessage.textContent = `Fundet ${nearbyListings.length} lejemål inden for radius.`;
-    
     nearbyListings.forEach(listing => {
         const marker = createMarker(listing);
         listingMarkers.addLayer(marker);
-        
         const item = document.createElement('div');
         item.className = 'listing-item';
-        item.innerHTML = `
-            <h3>${listing.name || 'Airbnb'}</h3>
-            <p style="font-weight: bold; color: #555; margin-bottom: 5px;">Vært: ${listing.host_name || 'Ukendt'}</p>
-            <p>${listing.room_type} • ${listing.last_review || 'Ingen anmeldelser'}</p>
-            <span class="price">${listing.price} DKK / nat</span>
-        `;
+        item.innerHTML = `<h3>${listing.name || 'Airbnb'}</h3><p style="font-weight: bold; color: #555;">Vært: ${listing.host_name || 'Ukendt'}</p><p>${listing.room_type} • ${listing.last_review || 'Ingen'}</p><span class="price">${listing.price} DKK / nat</span>`;
         item.onclick = () => { map.setView([listing.latitude, listing.longitude], 18); marker.openPopup(); };
         item.onmouseenter = () => showPreview(listing.picture_url);
         item.onmouseleave = () => hidePreview();
@@ -217,56 +224,40 @@ function renderStandardView() {
 
 function renderMatchedView() {
     const tenantsWithMatches = matchedTenants.filter(t => t.matches && t.matches.length > 0);
-    statusMessage.textContent = `Viser ${tenantsWithMatches.length} lejere med Airbnb-matches.`;
+    statusMessage.textContent = `Viser ${tenantsWithMatches.length} lejere med Airbnb-matches i området.`;
 
     if (tenantsWithMatches.length === 0) {
-        listingList.innerHTML = '<p style="padding:20px;">Ingen matches fundet i dette område.</p>';
+        listingList.innerHTML = '<p style="padding:20px;">Ingen matches fundet i det valgte område.</p>';
         return;
     }
 
     tenantsWithMatches.forEach(tenant => {
         const item = document.createElement('div');
         item.className = 'listing-item matched-item';
-        // Viser Lejernr + Adresse i overskriften og Areal under navnet
-        item.innerHTML = `
-            <div class="lejernr">${tenant['Lejernr.'] || 'Nr'} - ${tenant['Adresse'] || ''}</div>
-            <h3>${tenant['Navn']}</h3>
-            <p style="color: #666; margin-bottom: 5px;">Areal: ${tenant['Areal'] || '0'} m²</p>
-            <p style="font-weight: bold; color: #c0392b;">${tenant.matches.length} match(es) fundet på Airbnb</p>
-        `;
+        item.innerHTML = `<div class="lejernr">${tenant['Lejernr.'] || 'Nr'} - ${tenant['Adresse'] || ''}</div><h3>${tenant['Navn']}</h3><p style="color: #666;">Areal: ${tenant['Areal'] || '0'} m² • Rum: ${tenant['Rum'] || '?'}</p><p style="font-weight: bold; color: #c0392b;">${tenant.matches.length} match(es) fundet</p>`;
         
         item.onclick = () => {
+            // Fjern markering fra alle andre
+            document.querySelectorAll('.matched-item').forEach(el => el.classList.remove('selected'));
+            // Marker denne lejer
+            item.classList.add('selected');
+
             listingMarkers.clearLayers();
             tenant.matches.forEach((m, idx) => {
                 const marker = createMarker(m, '#e74c3c');
                 listingMarkers.addLayer(marker);
-                if (idx === 0) {
-                    map.setView([m.latitude, m.longitude], 17);
-                    marker.openPopup();
-                }
+                if (idx === 0) { map.setView([m.latitude, m.longitude], 17); marker.openPopup(); }
             });
         };
         listingList.appendChild(item);
-        
-        tenant.matches.forEach(m => {
-            listingMarkers.addLayer(createMarker(m, '#e74c3c'));
-        });
+        tenant.matches.forEach(m => { listingMarkers.addLayer(createMarker(m, '#e74c3c')); });
     });
 }
 
 function createMarker(listing, color = 'blue') {
-    const marker = L.circleMarker([listing.latitude, listing.longitude], {
-        color: color, fillColor: color, fillOpacity: 0.5, radius: 8
-    });
+    const marker = L.circleMarker([listing.latitude, listing.longitude], { color: color, fillColor: color, fillOpacity: 0.5, radius: 8 });
     const imageHTML = listing.picture_url ? `<img src="${listing.picture_url}" class="popup-img">` : '';
-    marker.bindPopup(`
-        <div class="info-popup">
-            ${imageHTML}
-            <b>${listing.name || 'Airbnb'}</b><br>
-            Vært: ${listing.host_name || 'Ukendt'}<br>
-            Pris: ${listing.price} DKK<br>
-            <a href="https://www.airbnb.com/rooms/${listing.id}" target="_blank">Se på Airbnb.dk</a>
-        </div>`);
+    marker.bindPopup(`<div class="info-popup">${imageHTML}<b>${listing.name || 'Airbnb'}</b><br>Vært: ${listing.host_name}<br>Pris: ${listing.price}<br><a href="https://www.airbnb.com/rooms/${listing.id}" target="_blank">Se på Airbnb.dk</a></div>`);
     return marker;
 }
 
@@ -280,49 +271,24 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
 // 5. Match & Export
 matchBtn.onclick = () => lejerlisteUpload.click();
-
 lejerlisteUpload.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file || nearbyListings.length === 0) return alert("Søg på en adresse og find lejemål først.");
     Papa.parse(file, {
         header: true, skipEmptyLines: true, delimiter: ";",
-        complete: function(results) {
-            processLejerlisteMatch(results.data, file.name);
-        }
+        complete: function(results) { processLejerlisteMatch(results.data, file.name); }
     });
     lejerlisteUpload.value = '';
 });
 
 function processLejerlisteMatch(lejerData, originalFileName) {
-    let matchTotal = 0;
-    matchedTenants = lejerData.map(lejerRow => {
-        const fullLejerName = (lejerRow['Navn'] || '').toLowerCase();
-        const matches = nearbyListings.filter(airbnb => {
-            const host = (airbnb.host_name || '').toLowerCase();
-            return host && new RegExp(`\\b${host}\\b`, 'i').test(fullLejerName);
-        });
-        lejerRow.matches = matches;
-        if (matches.length > 0) matchTotal++;
-        matches.forEach((m, i) => lejerRow[`airbnb_listing_${i+1}`] = `https://www.airbnb.com/rooms/${m.id}`);
-        return lejerRow;
-    });
-
+    uploadedTenantData = lejerData;
+    lastMatchFileName = originalFileName.replace(/\.csv$/i, '') + "_airbnb_matches.csv";
     toggleContainer.style.display = 'block';
     isMatchMode = true;
     matchToggle.checked = true;
     filterListings();
-
-    // Gem data til manuel download i stedet for automatisk download
-    const allKeys = new Set();
-    matchedTenants.forEach(row => {
-        Object.keys(row).forEach(k => {
-            if (k !== 'matches') allKeys.add(k);
-        });
-    });
-    lastMatchCSV = Papa.unparse({ fields: Array.from(allKeys), data: matchedTenants }, { delimiter: ';' });
-    lastMatchFileName = originalFileName.replace(/\.csv$/i, '') + "_airbnb_matches.csv";
-    
-    alert(`Matching færdig! Fandt matches for ${matchTotal} personer. Du kan nu downloade resultatet eller gennemse det på kortet.`);
+    alert(`Lejerliste indlæst! Siden opdateres nu automatisk når du ændrer radius.`);
 }
 
 downloadMatchesBtn.onclick = () => {
