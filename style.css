@@ -139,6 +139,29 @@ body {
     border-color: #007bff;
 }
 
+#sidebar-tools {
+    padding: 10px 20px;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    justify-content: stretch;
+}
+
+.secondary-btn {
+    width: 100%;
+    padding: 8px 15px;
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.secondary-btn:hover {
+    background: #5a6268;
+}
+
 #listing-list {
     flex-grow: 1;
 }
