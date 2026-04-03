@@ -85,23 +85,45 @@ radiusSlider.addEventListener('input', (e) => {
 sortSelect.addEventListener('change', () => {
     if (currentSearchCoords) filterListings();
 });
+// Globale tilstande
+let isCSVLoading = true;
+...
+// 1.1 Hjælpefunktioner
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
 
-matchToggle.addEventListener('change', (e) => {
-    isMatchMode = e.target.checked;
-    filterListings();
-});
-
-// 2. Hent Airbnb-data
+function parsePrice(price) {
+...
+// 2. Hent Airbnb-data med Worker
+statusMessage.textContent = "Henter Airbnb-data (44MB)... Vent venligst.";
 Papa.parse('listings.csv', {
-    download: true, header: true, dynamicTyping: true,
+    download: true,
+    header: true,
+    dynamicTyping: true,
+    worker: true, // Bruger en separat tråd så UI ikke fryser
     complete: function(results) {
         allListings = results.data.filter(l => l.latitude && l.longitude);
+        isCSVLoading = false;
+        statusMessage.textContent = "Indtast en adresse for at starte";
         console.log(`Indlæst ${allListings.length} Airbnb lejemål.`);
+    },
+    error: function(err) {
+        statusMessage.textContent = "Fejl: Kunne ikke hente listings.csv.";
+        statusMessage.style.color = "red";
     }
 });
 
-// 3. Adressesøgning
-searchInput.addEventListener('input', async (e) => {
+// 3. Adressesøgning med Debounce (300ms)
+const handleSearch = async (e) => {
     const query = e.target.value;
     if (query.length < 3) { resultsContainer.style.display = 'none'; return; }
     try {
@@ -109,7 +131,10 @@ searchInput.addEventListener('input', async (e) => {
         currentResults = await response.json();
         displayAutocompleteResults(currentResults);
     } catch (error) { console.error("API Fejl:", error); }
-});
+};
+
+searchInput.addEventListener('input', debounce(handleSearch, 300));
+
 
 searchInput.addEventListener('keydown', (e) => {
     const items = resultsContainer.getElementsByClassName('autocomplete-item');
