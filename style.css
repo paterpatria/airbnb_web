@@ -162,6 +162,40 @@ body {
     background: #5a6268;
 }
 
+/* Toggle Switch Styling */
+.switch-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    color: #c0392b;
+}
+
+#match-toggle {
+    width: 40px;
+    height: 20px;
+    cursor: pointer;
+}
+
+/* Matched listing item styling */
+.matched-item {
+    background: #fff0f1;
+    border-left: 5px solid #e74c3c;
+}
+
+.matched-item h3 {
+    color: #c0392b;
+}
+
+.matched-item .lejernr {
+    font-size: 11px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 #listing-list {
     flex-grow: 1;
 }
