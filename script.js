@@ -8,6 +8,7 @@
 
 // 1. Initialisering af kortet
 const map = L.map('map', { zoomControl: false }).setView([55.6761, 12.5683], 13);
+const map = L.map('map', { zoomControl: false }).setView([55.6761, 12.5683], 13);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -20,10 +21,19 @@ let matchedTenants = [];
 let uploadedTenantData = null;
 let isMatchMode = false;
 let currentSearchCoords = null;
+let allListings = [];
+let nearbyListings = [];
+let matchedTenants = [];
+let uploadedTenantData = null;
+let isMatchMode = false;
+let currentSearchCoords = null;
 let addressMarker = null;
 let radiusCircle = null;
 let listingMarkers = L.layerGroup().addTo(map);
 let currentResults = [];
+let focusedIndex = -1;
+let lastMatchCSV = null;
+let lastMatchFileName = "";
 let focusedIndex = -1;
 let lastMatchCSV = null;
 let lastMatchFileName = "";
@@ -119,6 +129,8 @@ function updateFocus(items) {
 
 // --- EVENT LISTENERS ---
 
+// --- EVENT LISTENERS ---
+
 radiusSlider.addEventListener('input', (e) => {
     radiusValueDisplay.textContent = e.target.value;
     if (currentSearchCoords) filterListings();
@@ -127,6 +139,12 @@ radiusSlider.addEventListener('input', (e) => {
 sortSelect.addEventListener('change', () => {
     if (currentSearchCoords) filterListings();
 });
+
+matchToggle.addEventListener('change', (e) => {
+    isMatchMode = e.target.checked;
+    filterListings();
+});
+
 
 matchToggle.addEventListener('change', (e) => {
     isMatchMode = e.target.checked;
@@ -204,8 +222,12 @@ function filterListings() {
     nearbyListings = allListings.filter(listing => {
         const dist = calculateDistance(targetLat, targetLon, listing.latitude, listing.longitude);
         return dist <= radiusInMeters;
+        const dist = calculateDistance(targetLat, targetLon, listing.latitude, listing.longitude);
+        return dist <= radiusInMeters;
     });
 
+    if (uploadedTenantData) updateDynamicMatches();
+    if (isMatchMode) renderMatchedView(); else renderStandardView();
     if (uploadedTenantData) updateDynamicMatches();
     if (isMatchMode) renderMatchedView(); else renderStandardView();
 }
@@ -224,6 +246,7 @@ function updateDynamicMatches() {
     });
 
     const allKeys = new Set();
+    matchedTenants.forEach(row => { Object.keys(row).forEach(k => { if (k !== 'matches') allKeys.add(k); }); });
     matchedTenants.forEach(row => { Object.keys(row).forEach(k => { if (k !== 'matches') allKeys.add(k); }); });
     lastMatchCSV = Papa.unparse({ fields: Array.from(allKeys), data: matchedTenants }, { delimiter: ';' });
 }
@@ -295,6 +318,8 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     const a = Math.sin(dp/2)**2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl/2)**2;
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
+
+// --- MATCH & EXPORT ---
 
 // --- MATCH & EXPORT ---
 
