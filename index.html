@@ -15,6 +15,14 @@
 
     <!-- Sektion til søgning og knapper -->
     <div id="controls">
+        <div id="dataset-container">
+            <label for="dataset-select">Datakilde:</label>
+            <select id="dataset-select">
+                <option value="insideairbnb_listings_slim.csv">Inside Airbnb (m. billeder)</option>
+                <option value="doorstepanalytics_listings.csv">Doorstep Analytics (uden billeder)</option>
+            </select>
+        </div>
+
         <div id="search-container">
             <input type="text" id="address-search" placeholder="Søg efter en adresse i København..." autocomplete="off">
             <div id="autocomplete-results"></div>

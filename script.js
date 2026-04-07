@@ -1,9 +1,8 @@
 /**
  * FORMÅL: Håndterer al interaktiv logik på siden.
  * - Initialisering af kort & UI
- * - Indlæsning af optimeret Airbnb-data (slim CSV)
+ * - Valg mellem forskellige datakilder (Inside Airbnb vs Doorstep)
  * - Dynamisk matching mod lejerliste
- * - Visning af billede-preview og sortering
  */
 
 // 1. Initialisering af kortet
@@ -43,37 +42,72 @@ const matchBtn = document.getElementById('match-btn');
 const matchToggle = document.getElementById('match-toggle');
 const toggleContainer = document.getElementById('view-toggle-container');
 const downloadMatchesBtn = document.getElementById('download-matches-btn');
+const datasetSelect = document.getElementById('dataset-select');
 
 // --- DATA INDLÆSNING ---
 
 function loadData() {
-    statusMessage.textContent = "Indlæser Airbnb-data...";
-    Papa.parse('insideairbnb_listings_slim.csv', {
+    const fileName = datasetSelect.value;
+    statusMessage.textContent = `Indlæser data fra ${fileName}...`;
+    statusMessage.style.color = "#666";
+    
+    // Nulstil data
+    allListings = [];
+    listingMarkers.clearLayers();
+    listingList.innerHTML = '<p style="padding: 20px; color: #666;">Indlæser data...</p>';
+
+    Papa.parse(fileName, {
         download: true,
         header: true,
         dynamicTyping: true,
         skipEmptyLines: true,
         complete: function(results) {
-            allListings = results.data
-                .filter(l => l.latitude && l.longitude)
-                .map(l => ({
-                    ...l,
-                    latitude: parseFloat(l.latitude),
-                    longitude: parseFloat(l.longitude)
-                }));
+            // Find ud af hvilke kolonner vi har (Doorstep bruger Lat/Lng og Airbnb_ListingID)
+            const data = results.data;
+            if (!data || data.length === 0) return;
+
+            allListings = data.map(l => {
+                // Udtræk koordinater (håndterer både Lat/Lng og latitude/longitude)
+                const lat = parseFloat(l.latitude || l.Lat);
+                const lon = parseFloat(l.longitude || l.Lng);
+                const id = l.id || l.Airbnb_ListingID;
+
+                if (!lat || !lon || !id) return null;
+
+                return {
+                    id: id,
+                    name: l.name || l.ListingTitle || "Airbnb",
+                    host_name: l.host_name || l.Host_FirstName || "Ukendt",
+                    latitude: lat,
+                    longitude: lon,
+                    room_type: l.room_type || l.RoomType || "Bolig",
+                    price: l.price || l.BasicNightPrice || 0,
+                    number_of_reviews: l.number_of_reviews || l.ReviewCount || 0,
+                    last_review: l.last_review || null,
+                    availability_365: l.availability_365 || null,
+                    picture_url: l.picture_url || null
+                };
+            }).filter(item => item !== null);
             
-            statusMessage.textContent = "Indtast en adresse for at starte";
-            console.log(`Indlæst ${allListings.length} Airbnb lejemål fra slim-fil.`);
+            statusMessage.textContent = "Klar. Søg på en adresse.";
+            console.log(`Indlæst ${allListings.length} lejemål.`);
+            
+            // Opdater visning hvis der allerede er søgt
+            if (currentSearchCoords) filterListings();
         },
         error: (err) => {
             console.error("CSV Fejl:", err);
-            statusMessage.textContent = "Fejl: Kunne ikke hente insideairbnb_listings_slim.csv";
+            statusMessage.textContent = `Fejl: Kunne ikke hente filen.`;
             statusMessage.style.color = "red";
         }
     });
 }
 
+// Start app
 loadData();
+
+// Skift datakilde
+datasetSelect.onchange = () => loadData();
 
 // --- HJÆLPEFUNKTIONER ---
 
@@ -93,7 +127,7 @@ function parsePrice(price) {
 }
 
 function showPreview(url) {
-    if (!url) return;
+    if (!url) { hidePreview(); return; }
     previewImg.src = url;
     imagePreview.style.display = 'block';
 }
@@ -170,7 +204,7 @@ async function selectAddress(item) {
         const [lon, lat] = data.adgangspunkt.koordinater;
         currentSearchCoords = [lat, lon];
         processNewLocation(lat, lon);
-    } catch (e) { console.error("Fejl ved hentning af adresse-detaljer:", e); }
+    } catch (e) { console.error("API Fejl:", e); }
 }
 
 function processNewLocation(lat, lon) {
@@ -182,10 +216,8 @@ function processNewLocation(lat, lon) {
     filterListings();
 }
 
-// --- FILTRERING OG VISNING ---
-
 function filterListings() {
-    if (!currentSearchCoords) return;
+    if (!currentSearchCoords || allListings.length === 0) return;
     const [targetLat, targetLon] = currentSearchCoords;
     const radiusInMeters = parseInt(radiusSlider.value);
     if (radiusCircle) radiusCircle.setRadius(radiusInMeters);
@@ -236,7 +268,7 @@ function renderStandardView() {
         listingMarkers.addLayer(marker);
         const item = document.createElement('div');
         item.className = 'listing-item';
-        item.innerHTML = `<h3>${listing.name || 'Airbnb'}</h3><p style="font-weight: bold; color: #555;">Vært: ${listing.host_name || 'Ukendt'}</p><p>${listing.room_type} • ${listing.last_review || 'Ingen'}</p><span class="price">${listing.price || 'Ingen pris'}</span>`;
+        item.innerHTML = `<h3>${listing.name || 'Airbnb'}</h3><p style="font-weight: bold; color: #555;">Vært: ${listing.host_name || 'Ukendt'}</p><p>${listing.room_type} • ${listing.number_of_reviews} anm.</p><span class="price">${listing.price || '0'} DKK / nat</span>`;
         item.onclick = () => { map.setView([listing.latitude, listing.longitude], 18); marker.openPopup(); };
         item.onmouseenter = () => showPreview(listing.picture_url);
         item.onmouseleave = () => hidePreview();
@@ -276,7 +308,7 @@ function renderMatchedView() {
 function createMarker(listing, color = 'blue') {
     const marker = L.circleMarker([listing.latitude, listing.longitude], { color: color, fillColor: color, fillOpacity: 0.5, radius: 8 });
     const imageHTML = listing.picture_url ? `<img src="${listing.picture_url}" class="popup-img">` : '';
-    marker.bindPopup(`<div class="info-popup">${imageHTML}<b>${listing.name || 'Airbnb'}</b><br>Vært: ${listing.host_name}<br>Pris: ${listing.price}<br><a href="https://www.airbnb.com/rooms/${listing.id}" target="_blank">Se på Airbnb.dk</a></div>`);
+    marker.bindPopup(`<div class="info-popup">${imageHTML}<b>${listing.name || 'Airbnb'}</b><br>Vært: ${listing.host_name}<br>Pris: ${listing.price} DKK<br><a href="https://www.airbnb.com/rooms/${listing.id}" target="_blank">Se på Airbnb.dk</a></div>`);
     return marker;
 }
 
@@ -308,7 +340,7 @@ function processLejerlisteMatch(lejerData, originalFileName) {
     isMatchMode = true;
     matchToggle.checked = true;
     filterListings();
-    alert(`Lejerliste indlæst! Siden opdateres nu automatisk når du ændrer radius.`);
+    alert(`Lejerliste indlæst!`);
 }
 
 downloadMatchesBtn.onclick = () => {

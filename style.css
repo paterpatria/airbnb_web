@@ -15,10 +15,30 @@ body {
     background: white;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     display: grid;
-    grid-template-columns: 400px 200px 1fr auto;
-    gap: 50px;
+    grid-template-columns: auto 400px 200px 1fr auto; /* Tilføjet auto kolonne til start */
+    gap: 30px; /* Reduceret gap lidt for at give plads */
     align-items: center;
     z-index: 1000;
+}
+
+#dataset-container {
+    display: flex;
+    flex-direction: column;
+}
+
+#dataset-container label {
+    font-size: 12px;
+    font-weight: bold;
+    color: #666;
+    margin-bottom: 3px;
+}
+
+#dataset-select {
+    padding: 8px;
+    border-radius: 6px;
+    border: 2px solid #e0e0e0;
+    outline: none;
+    cursor: pointer;
 }
 
 #search-container {
