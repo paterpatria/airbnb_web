@@ -1,38 +1,32 @@
 /**
  * FORMÅL: Håndterer al interaktiv logik på siden.
- * - Initialisering af kort
- * - Hentning af adresser fra API
- * - Indlæsning, sortering og filtrering af CSV-data
- * - Visning af billede-preview
- * - Matching med ekstern lejerliste (CSV upload) & Visualisering af matches
+ * - Initialisering af kort & UI
+ * - Indlæsning af optimeret Airbnb-data (slim CSV)
+ * - Dynamisk matching mod lejerliste
+ * - Visning af billede-preview og sortering
  */
 
 // 1. Initialisering af kortet
-const map = L.map('map', {
-    zoomControl: false // Deaktiver standard zoom knapper
-}).setView([55.6761, 12.5683], 13);
-
+const map = L.map('map', { zoomControl: false }).setView([55.6761, 12.5683], 13);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
-
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 }).addTo(map);
 
 // Globale tilstande
+let allListings = [];
+let nearbyListings = [];
+let matchedTenants = [];
+let uploadedTenantData = null;
+let isMatchMode = false;
+let currentSearchCoords = null;
 let addressMarker = null;
 let radiusCircle = null;
 let listingMarkers = L.layerGroup().addTo(map);
-let nearbyListings = [];
-let allListings = [];
-let matchedTenants = []; // Gemmer lejere med matches
-let uploadedTenantData = null; // Gemmer den rå lejerliste til dynamisk matching
-let isMatchMode = false; // Toggle for "Alle" vs "Matches"
-let currentSearchCoords = null;
-let markersById = new Map();
-let focusedIndex = -1;
 let currentResults = [];
-let lastMatchCSV = null; // Gemmer den dannede CSV-streng til download knappen
-let lastMatchFileName = ""; // Gemmer filnavnet til download knappen
+let focusedIndex = -1;
+let lastMatchCSV = null;
+let lastMatchFileName = "";
 
 // UI Elementer
 const searchInput = document.getElementById('address-search');
@@ -50,7 +44,54 @@ const matchToggle = document.getElementById('match-toggle');
 const toggleContainer = document.getElementById('view-toggle-container');
 const downloadMatchesBtn = document.getElementById('download-matches-btn');
 
-// 1.1 Hjælpefunktioner
+// --- DATA INDLÆSNING ---
+
+function loadData() {
+    statusMessage.textContent = "Indlæser Airbnb-data...";
+    Papa.parse('insideairbnb_listings_slim.csv', {
+        download: true,
+        header: true,
+        dynamicTyping: true, // Forsøger at konvertere tal automatisk
+        skipEmptyLines: true,
+        complete: function(results) {
+            // Filtrer og konverter koordinater eksplicit til tal
+            allListings = results.data
+                .filter(l => l.latitude && l.longitude)
+                .map(l => ({
+                    ...l,
+                    latitude: parseFloat(l.latitude),
+                    longitude: parseFloat(l.longitude)
+                }));
+            
+            statusMessage.textContent = "Indtast en adresse for at starte";
+            console.log(`Indlæst ${allListings.length} Airbnb lejemål fra slim-fil.`);
+            
+            if (allListings.length === 0) {
+                statusMessage.textContent = "Advarsel: Ingen gyldige data fundet i filen.";
+                statusMessage.style.color = "orange";
+            }
+        },
+        error: (err) => {
+            console.error("CSV Fejl:", err);
+            statusMessage.textContent = "Fejl: Kunne ikke hente insideairbnb_listings_slim.csv";
+            statusMessage.style.color = "red";
+        }
+    });
+}
+
+loadData();
+
+// --- HJÆLPEFUNKTIONER ---
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => { clearTimeout(timeout); func(...args); };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 function parsePrice(price) {
     if (typeof price === 'number') return price;
     if (!price) return 0;
@@ -76,7 +117,8 @@ function updateFocus(items) {
     }
 }
 
-// Event Listeners
+// --- EVENT LISTENERS ---
+
 radiusSlider.addEventListener('input', (e) => {
     radiusValueDisplay.textContent = e.target.value;
     if (currentSearchCoords) filterListings();
@@ -85,44 +127,12 @@ radiusSlider.addEventListener('input', (e) => {
 sortSelect.addEventListener('change', () => {
     if (currentSearchCoords) filterListings();
 });
-// Globale tilstande
-let isCSVLoading = true;
-...
-// 1.1 Hjælpefunktioner
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
 
-function parsePrice(price) {
-...
-// 2. Hent Airbnb-data med Worker
-statusMessage.textContent = "Henter Airbnb-data (44MB)... Vent venligst.";
-Papa.parse('listings.csv', {
-    download: true,
-    header: true,
-    dynamicTyping: true,
-    worker: true, // Bruger en separat tråd så UI ikke fryser
-    complete: function(results) {
-        allListings = results.data.filter(l => l.latitude && l.longitude);
-        isCSVLoading = false;
-        statusMessage.textContent = "Indtast en adresse for at starte";
-        console.log(`Indlæst ${allListings.length} Airbnb lejemål.`);
-    },
-    error: function(err) {
-        statusMessage.textContent = "Fejl: Kunne ikke hente listings.csv.";
-        statusMessage.style.color = "red";
-    }
+matchToggle.addEventListener('change', (e) => {
+    isMatchMode = e.target.checked;
+    filterListings();
 });
 
-// 3. Adressesøgning med Debounce (300ms)
 const handleSearch = async (e) => {
     const query = e.target.value;
     if (query.length < 3) { resultsContainer.style.display = 'none'; return; }
@@ -134,7 +144,6 @@ const handleSearch = async (e) => {
 };
 
 searchInput.addEventListener('input', debounce(handleSearch, 300));
-
 
 searchInput.addEventListener('keydown', (e) => {
     const items = resultsContainer.getElementsByClassName('autocomplete-item');
@@ -161,11 +170,15 @@ function displayAutocompleteResults(data) {
 async function selectAddress(item) {
     searchInput.value = item.tekst;
     resultsContainer.style.display = 'none';
-    const response = await fetch(item.adgangsadresse.href);
-    const data = await response.json();
-    const [lon, lat] = data.adgangspunkt.koordinater;
-    currentSearchCoords = [lat, lon];
-    processNewLocation(lat, lon);
+    try {
+        const response = await fetch(item.adgangsadresse.href);
+        const data = await response.json();
+        const [lon, lat] = data.adgangspunkt.koordinater;
+        currentSearchCoords = [lat, lon];
+        processNewLocation(lat, lon);
+    } catch (e) {
+        console.error("Fejl ved hentning af adresse-detaljer:", e);
+    }
 }
 
 function processNewLocation(lat, lon) {
@@ -177,7 +190,8 @@ function processNewLocation(lat, lon) {
     filterListings();
 }
 
-// 4. Filtrering og Visning
+// --- FILTRERING OG VISNING ---
+
 function filterListings() {
     if (!currentSearchCoords) return;
     const [targetLat, targetLon] = currentSearchCoords;
@@ -186,21 +200,14 @@ function filterListings() {
 
     listingMarkers.clearLayers();
     listingList.innerHTML = '';
-    markersById.clear();
 
     nearbyListings = allListings.filter(listing => {
-        return calculateDistance(targetLat, targetLon, listing.latitude, listing.longitude) <= radiusInMeters;
+        const dist = calculateDistance(targetLat, targetLon, listing.latitude, listing.longitude);
+        return dist <= radiusInMeters;
     });
 
-    if (uploadedTenantData) {
-        updateDynamicMatches();
-    }
-
-    if (isMatchMode) {
-        renderMatchedView();
-    } else {
-        renderStandardView();
-    }
+    if (uploadedTenantData) updateDynamicMatches();
+    if (isMatchMode) renderMatchedView(); else renderStandardView();
 }
 
 function updateDynamicMatches() {
@@ -217,9 +224,7 @@ function updateDynamicMatches() {
     });
 
     const allKeys = new Set();
-    matchedTenants.forEach(row => {
-        Object.keys(row).forEach(k => { if (k !== 'matches') allKeys.add(k); });
-    });
+    matchedTenants.forEach(row => { Object.keys(row).forEach(k => { if (k !== 'matches') allKeys.add(k); }); });
     lastMatchCSV = Papa.unparse({ fields: Array.from(allKeys), data: matchedTenants }, { delimiter: ';' });
 }
 
@@ -239,7 +244,7 @@ function renderStandardView() {
         listingMarkers.addLayer(marker);
         const item = document.createElement('div');
         item.className = 'listing-item';
-        item.innerHTML = `<h3>${listing.name || 'Airbnb'}</h3><p style="font-weight: bold; color: #555;">Vært: ${listing.host_name || 'Ukendt'}</p><p>${listing.room_type} • ${listing.last_review || 'Ingen'}</p><span class="price">${listing.price} DKK / nat</span>`;
+        item.innerHTML = `<h3>${listing.name || 'Airbnb'}</h3><p style="font-weight: bold; color: #555;">Vært: ${listing.host_name || 'Ukendt'}</p><p>${listing.room_type} • ${listing.last_review || 'Ingen'}</p><span class="price">${listing.price || 'Ingen pris'}</span>`;
         item.onclick = () => { map.setView([listing.latitude, listing.longitude], 18); marker.openPopup(); };
         item.onmouseenter = () => showPreview(listing.picture_url);
         item.onmouseleave = () => hidePreview();
@@ -262,11 +267,8 @@ function renderMatchedView() {
         item.innerHTML = `<div class="lejernr">${tenant['Lejernr.'] || 'Nr'} - ${tenant['Adresse'] || ''}</div><h3>${tenant['Navn']}</h3><p style="color: #666;">Areal: ${tenant['Areal'] || '0'} m² • Rum: ${tenant['Rum'] || '?'}</p><p style="font-weight: bold; color: #c0392b;">${tenant.matches.length} match(es) fundet</p>`;
         
         item.onclick = () => {
-            // Fjern markering fra alle andre
             document.querySelectorAll('.matched-item').forEach(el => el.classList.remove('selected'));
-            // Marker denne lejer
             item.classList.add('selected');
-
             listingMarkers.clearLayers();
             tenant.matches.forEach((m, idx) => {
                 const marker = createMarker(m, '#e74c3c');
@@ -294,7 +296,8 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
 
-// 5. Match & Export
+// --- MATCH & EXPORT ---
+
 matchBtn.onclick = () => lejerlisteUpload.click();
 lejerlisteUpload.addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -313,7 +316,6 @@ function processLejerlisteMatch(lejerData, originalFileName) {
     isMatchMode = true;
     matchToggle.checked = true;
     filterListings();
-    alert(`Lejerliste indlæst! Siden opdateres nu automatisk når du ændrer radius.`);
 }
 
 downloadMatchesBtn.onclick = () => {
