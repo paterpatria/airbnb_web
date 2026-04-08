@@ -1,7 +1,7 @@
 /**
  * FORMÅL: Håndterer al interaktiv logik på siden.
  * - Initialisering af kort & UI
- * - Valg mellem forskellige datakilder (Inside Airbnb vs Doorstep)
+ * - Valg mellem kilder (Inside Airbnb, Doorstep eller Kombineret)
  * - Dynamisk matching mod lejerliste
  */
 
@@ -46,61 +46,99 @@ const datasetSelect = document.getElementById('dataset-select');
 
 // --- DATA INDLÆSNING ---
 
-function loadData() {
-    const fileName = datasetSelect.value;
-    statusMessage.textContent = `Indlæser data fra ${fileName}...`;
+// Hjælpefunktion til at indlæse og parse en fil som et Promise
+function fetchAndParse(fileName) {
+    return new Promise((resolve, reject) => {
+        Papa.parse(fileName, {
+            download: true,
+            header: true,
+            dynamicTyping: true,
+            skipEmptyLines: true,
+            complete: results => resolve(results.data),
+            error: err => reject(err)
+        });
+    });
+}
+
+async function loadData() {
+    const mode = datasetSelect.value;
+    statusMessage.textContent = `Indlæser data (${mode})...`;
     statusMessage.style.color = "#666";
     
-    // Nulstil data
-    allListings = [];
     listingMarkers.clearLayers();
     listingList.innerHTML = '<p style="padding: 20px; color: #666;">Indlæser data...</p>';
 
-    Papa.parse(fileName, {
-        download: true,
-        header: true,
-        dynamicTyping: true,
-        skipEmptyLines: true,
-        complete: function(results) {
-            // Find ud af hvilke kolonner vi har (Doorstep bruger Lat/Lng og Airbnb_ListingID)
-            const data = results.data;
-            if (!data || data.length === 0) return;
+    try {
+        let rawInside = [];
+        let rawDoorstep = [];
 
-            allListings = data.map(l => {
-                // Udtræk koordinater (håndterer både Lat/Lng og latitude/longitude)
-                const lat = parseFloat(l.latitude || l.Lat);
-                const lon = parseFloat(l.longitude || l.Lng);
-                const id = l.id || l.Airbnb_ListingID;
+        if (mode === 'combined' || mode.includes('insideairbnb')) {
+            rawInside = await fetchAndParse('insideairbnb_listings_slim.csv');
+        }
+        if (mode === 'combined' || mode.includes('doorstepanalytics')) {
+            rawDoorstep = await fetchAndParse('doorstepanalytics_listings.csv');
+        }
 
-                if (!lat || !lon || !id) return null;
+        const mergedMap = new Map();
 
-                return {
+        // 1. Process Inside Airbnb (prioriteres pga. billeder)
+        rawInside.forEach(l => {
+            const lat = parseFloat(l.latitude);
+            const lon = parseFloat(l.longitude);
+            const id = l.id;
+            if (lat && lon && id) {
+                mergedMap.set(id.toString(), {
                     id: id,
-                    name: l.name || l.ListingTitle || "Airbnb",
-                    host_name: l.host_name || l.Host_FirstName || "Ukendt",
+                    name: l.name || "Airbnb",
+                    host_name: l.host_name || "Ukendt",
                     latitude: lat,
                     longitude: lon,
-                    room_type: l.room_type || l.RoomType || "Bolig",
-                    price: l.price || l.BasicNightPrice || 0,
-                    number_of_reviews: l.number_of_reviews || l.ReviewCount || 0,
+                    room_type: l.room_type || "Bolig",
+                    price: l.price || 0,
+                    number_of_reviews: l.number_of_reviews || 0,
                     last_review: l.last_review || null,
                     availability_365: l.availability_365 || null,
-                    picture_url: l.picture_url || null
-                };
-            }).filter(item => item !== null);
-            
-            statusMessage.textContent = "Klar. Søg på en adresse.";
-            console.log(`Indlæst ${allListings.length} lejemål.`);
-            
-            // Opdater visning hvis der allerede er søgt
-            if (currentSearchCoords) filterListings();
-        },
-        error: (err) => {
-            console.error("CSV Fejl:", err);
-            statusMessage.textContent = `Fejl: Kunne ikke hente filen.`;
-            statusMessage.style.color = "red";
-        }
-    });
+                    picture_url: l.picture_url || null,
+                    source: 'Inside Airbnb'
+                });
+            }
+        });
+
+        // 2. Tilføj unikke fra Doorstep
+        rawDoorstep.forEach(l => {
+            const id = (l.Airbnb_ListingID || "").toString();
+            if (id && !mergedMap.has(id)) {
+                const lat = parseFloat(l.Lat);
+                const lon = parseFloat(l.Lng);
+                if (lat && lon) {
+                    mergedMap.set(id, {
+                        id: id,
+                        name: l.ListingTitle || "Airbnb (Doorstep)",
+                        host_name: l.Host_FirstName || "Ukendt",
+                        latitude: lat,
+                        longitude: lon,
+                        room_type: l.RoomType || "Bolig",
+                        price: l.BasicNightPrice || 0,
+                        number_of_reviews: l.ReviewCount || 0,
+                        last_review: null,
+                        availability_365: null,
+                        picture_url: null,
+                        source: 'Doorstep'
+                    });
+                }
+            }
+        });
+
+        allListings = Array.from(mergedMap.values());
+        statusMessage.textContent = `Klar. ${allListings.length} lejemål indlæst.`;
+        
+        if (currentSearchCoords) filterListings();
+
+    } catch (error) {
+        console.error("Fejl ved dataindlæsning:", error);
+        statusMessage.textContent = "Fejl ved indlæsning af data.";
+        statusMessage.style.color = "red";
+    }
 }
 
 // Start app
@@ -215,6 +253,8 @@ function processNewLocation(lat, lon) {
     radiusCircle = L.circle([lat, lon], { color: '#007bff', fillColor: '#007bff', fillOpacity: 0.1, weight: 2, radius: parseInt(radiusSlider.value) }).addTo(map);
     filterListings();
 }
+
+// --- FILTRERING OG VISNING ---
 
 function filterListings() {
     if (!currentSearchCoords || allListings.length === 0) return;
