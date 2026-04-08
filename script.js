@@ -46,13 +46,13 @@ const datasetSelect = document.getElementById('dataset-select');
 
 // --- DATA INDLÆSNING ---
 
-// Hjælpefunktion til at indlæse og parse en fil som et Promise
+// Hjælpefunktion til at indlæse og parse en fil
 function fetchAndParse(fileName) {
     return new Promise((resolve, reject) => {
         Papa.parse(fileName, {
             download: true,
             header: true,
-            dynamicTyping: true,
+            dynamicTyping: false, // VIKTIGT: Slået fra for at undgå ID-præcisionsfejl
             skipEmptyLines: true,
             complete: results => resolve(results.data),
             error: err => reject(err)
@@ -81,13 +81,13 @@ async function loadData() {
 
         const mergedMap = new Map();
 
-        // 1. Process Inside Airbnb (prioriteres pga. billeder)
+        // 1. Process Inside Airbnb
         rawInside.forEach(l => {
+            const id = (l.id || "").toString().trim();
             const lat = parseFloat(l.latitude);
             const lon = parseFloat(l.longitude);
-            const id = l.id;
             if (lat && lon && id) {
-                mergedMap.set(id.toString(), {
+                mergedMap.set(id, {
                     id: id,
                     name: l.name || "Airbnb",
                     host_name: l.host_name || "Ukendt",
@@ -95,7 +95,7 @@ async function loadData() {
                     longitude: lon,
                     room_type: l.room_type || "Bolig",
                     price: l.price || 0,
-                    number_of_reviews: l.number_of_reviews || 0,
+                    number_of_reviews: parseInt(l.number_of_reviews) || 0,
                     last_review: l.last_review || null,
                     availability_365: l.availability_365 || null,
                     picture_url: l.picture_url || null,
@@ -106,7 +106,7 @@ async function loadData() {
 
         // 2. Tilføj unikke fra Doorstep
         rawDoorstep.forEach(l => {
-            const id = (l.Airbnb_ListingID || "").toString();
+            const id = (l.Airbnb_ListingID || "").toString().trim();
             if (id && !mergedMap.has(id)) {
                 const lat = parseFloat(l.Lat);
                 const lon = parseFloat(l.Lng);
@@ -119,7 +119,7 @@ async function loadData() {
                         longitude: lon,
                         room_type: l.RoomType || "Bolig",
                         price: l.BasicNightPrice || 0,
-                        number_of_reviews: l.ReviewCount || 0,
+                        number_of_reviews: parseInt(l.ReviewCount) || 0,
                         last_review: null,
                         availability_365: null,
                         picture_url: null,
@@ -253,8 +253,6 @@ function processNewLocation(lat, lon) {
     radiusCircle = L.circle([lat, lon], { color: '#007bff', fillColor: '#007bff', fillOpacity: 0.1, weight: 2, radius: parseInt(radiusSlider.value) }).addTo(map);
     filterListings();
 }
-
-// --- FILTRERING OG VISNING ---
 
 function filterListings() {
     if (!currentSearchCoords || allListings.length === 0) return;
@@ -392,10 +390,24 @@ downloadMatchesBtn.onclick = () => {
 };
 
 document.getElementById('download-btn').onclick = () => {
-    const csv = Papa.unparse(nearbyListings.map(l => ({ airbnb_link: `https://www.airbnb.com/rooms/${l.id}`, ...l })), { delimiter: ';' });
+    if (nearbyListings.length === 0) return;
+
+    const exportData = nearbyListings.map(l => {
+        const row = {
+            airbnb_link: `https://www.airbnb.com/rooms/${l.id}`
+        };
+        Object.assign(row, l);
+        row.id = l.id.toString(); 
+        return row;
+    });
+
+    const csv = Papa.unparse(exportData, { delimiter: ';' });
+    const sanitizedAddress = searchInput.value.replace(/[/\\?%*:|"<>\s]/g, '_').substring(0, 50);
+    const fileName = `airbnb_resultater_${sanitizedAddress}.csv`;
+
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' }));
-    link.download = "airbnb_resultater.csv";
+    link.download = fileName;
     link.click();
 };
 
