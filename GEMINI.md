@@ -1,36 +1,30 @@
 # Projekt Oversigt: Airbnb Adresse-søger & Lejer-matcher
 
-Dette projekt er en interaktiv webapplikation til analyse af Airbnb-data i Danmark. Den gør det muligt at søge efter adresser, visualisere lejemål på et kort og foretage automatisk matching mod eksterne lejerlister.
+Dette projekt er en interaktiv webapplikation til analyse af Airbnb-data i Danmark. Den gør det muligt at søge efter adresser, visualisere lejemål på et kort og foretage automatisk matching mod eksterne lejerlister med avanceret sandsynlighedsberegning.
 
 ## Kernefunktionalitet
-- **Præcis Adressesøgning:** Integration med DAWA API (SDFI) til søgning på adgangsadresser med fuld tastaturnavigation.
-- **Interaktivt Kort:** Dynamisk visning af Airbnb-lejemål med en justerbar radius (100m - 2000m) og visuel cirkel-indikator.
-- **Avanceret Sortering:** Sidepanelet kan sorteres efter nyeste anmeldelser, pris, antal anmeldelser, værtsnavn eller tilgængelighed.
-- **Visuel Preview:** Stort billede-preview øverst på kortet ved hover i listen, samt billeder direkte i kortets popups.
-- **Lejerliste Matching (CSV Upload):** 
+- **Præcis Adressesøgning:** Integration med DAWA API (SDFI) til søgning på adgangsadresser. Kortet zoomer automatisk til den valgte radius (max zoom 16) for at sikre overblik.
+- **Interaktivt Kort:** Dynamisk visning af Airbnb-lejemål med en justerbar radius (100m - 2000m). Markører farvekodes efter match-sandsynlighed (Grøn/Orange/Grå).
+- **Avanceret Sortering:** Standardvisning kan sorteres efter anmeldelser, pris, værtsnavn eller tilgængelighed.
+- **Lejerliste Matching (Probabilistisk):** 
     - Upload af semikolon-separeret lejerliste.
-    - Intelligent navne-matching mod Airbnb-værter (ord-baseret regex).
-    - Reaktive matches: Resultaterne opdateres øjeblikkeligt, hvis radius-slideren ændres.
-    - Visuel toggle-mode til at skifte mellem "Alle lejemål" og "Kun matches".
-- **Eksport:** Mulighed for at downloade de filtrerede resultater eller de berigede lejerlister som CSV-filer med direkte links til Airbnb.
+    - **Sandsynlighedsscore (0-100 pts):**
+        1. **Navn (50 pts):** Regex match af værtsnavn mod lejerens fulde navn.
+        2. **Rum (30 pts):** Matcher hvis `Airbnb_Bedrooms + 1 == Lejer_Rum`.
+        3. **Areal (20 pts):** Matcher baseret på kapacitet (ca. 25m² pr. person).
+    - **Bevaring af rækkefølge:** Listen over matches følger den originale rækkefølge fra lejerlisten.
+- **Eksport:** Mulighed for at downloade berigede lejerlister som CSV. Match-kolonner (`airbnb_link_N` og `match_score_N`) tilføjes til sidst i filen for at bevare de originale data forrest.
 
 ## Teknologier
-- **Frontend:** HTML5, CSS3 (Grid/Flexbox), Vanilla JavaScript.
+- **Frontend:** Vanilla JavaScript (ES6+), HTML5, CSS3.
 - **Kort:** Leaflet.js med OpenStreetMap tiles.
 - **Data-håndtering:** PapaParse til parsing og generering af CSV-filer.
-- **API:** Dataforsyningen (DAWA) til adressesøgning og koordinater.
-
-## Projektstruktur
-- `index.html`: Struktur og UI-komponenter (kontrolpanel, sidebar, kort-container).
-- `style.css`: Visuel styling, herunder det dynamiske overlay-system til billede-previews.
-- `script.js`: Applikationslogik, herunder reaktiv tilstandshåndtering, afstandsberegning (Haversine) og matching-algoritmer.
-- `listings.csv`: Detaljeret Airbnb-datakilde (skal indeholde `picture_url`, `host_name`, etc.).
-
-## Lokale Krav
-- **Webserver:** Da applikationen indlæser lokale CSV-filer via JavaScript, skal den køres via en lokal server (f.eks. Python `http.server` eller VS Code `Live Server`).
-- **Dataformat:** Den uploadede lejerliste skal være semikolon-separeret (`;`) og indeholde kolonnerne `Navn`, `Lejernr.`, `Adresse`, `Areal` og `Rum`.
+- **API:** Dataforsyningen (DAWA) til adressesøgning.
 
 ## Udviklingskonventioner
-- **Reaktivitet:** Ændringer i radius eller sortering skal reflekteres øjeblikkeligt i både listen og på kortet.
-- **Brugervenlighed:** Fokus på visuel feedback (markering af valgte elementer, statusbeskeder).
-- **Separation of Concerns:** Logik, styling og struktur holdes strengt adskilt.
+- **ID Integritet:** Airbnb IDs behandles altid som strenge (`dynamicTyping: false`) for at undgå præcisionstab på 18-cifrede tal.
+- **Reaktivitet:** Ændringer i radius eller match-mode reflekteres øjeblikkeligt uden genindlæsning.
+- **Farvekoder:** 
+    - `>= 80%`: Grøn (Høj sandsynlighed)
+    - `>= 50%`: Orange (Mellem sandsynlighed)
+    - `< 50%`: Grå (Lav sandsynlighed)
