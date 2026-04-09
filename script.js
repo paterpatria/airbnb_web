@@ -13,6 +13,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 // Globale tilstande
+let currentMode = 'property'; // 'property' eller 'apartment'
+let selectedBBRData = null;
 let allListings = [];
 let nearbyListings = [];
 let matchedTenants = [];
@@ -43,6 +45,36 @@ const matchToggle = document.getElementById('match-toggle');
 const toggleContainer = document.getElementById('view-toggle-container');
 const downloadMatchesBtn = document.getElementById('download-matches-btn');
 const datasetSelect = document.getElementById('dataset-select');
+
+// Nye UI Elementer
+const modePropertyBtn = document.getElementById('mode-property');
+const modeApartmentBtn = document.getElementById('mode-apartment');
+const apartmentFields = document.getElementById('apartment-fields');
+const residentNameInput = document.getElementById('resident-name');
+const bbrInfoBox = document.getElementById('bbr-info-box');
+
+// --- MODE TOGGLE ---
+
+modePropertyBtn.onclick = () => switchMode('property');
+modeApartmentBtn.onclick = () => switchMode('apartment');
+
+function switchMode(mode) {
+    currentMode = mode;
+    modePropertyBtn.classList.toggle('active', mode === 'property');
+    modeApartmentBtn.classList.toggle('active', mode === 'apartment');
+    apartmentFields.style.display = mode === 'apartment' ? 'flex' : 'none';
+    searchInput.placeholder = mode === 'apartment' ? 'Søg efter lejlighed (f.eks. Gade 1, 2. tv)...' : 'Søg efter ejendom (adgangsadresse)...';
+    
+    // Nulstil søgning ved skift
+    searchInput.value = '';
+    currentSearchCoords = null;
+    if (addressMarker) map.removeLayer(addressMarker);
+    if (radiusCircle) map.removeLayer(radiusCircle);
+    listingMarkers.clearLayers();
+    listingList.innerHTML = '<p style="padding: 20px; color: #666;">Indtast en adresse for at starte</p>';
+    bbrInfoBox.innerHTML = '<p>Vælg en lejlighed for at se BBR-data...</p>';
+    selectedBBRData = null;
+}
 
 // --- DATA INDLÆSNING ---
 
@@ -313,26 +345,85 @@ function filterListings() {
 
 function renderStandardView() {
     const sortBy = sortSelect.value;
-    nearbyListings.sort((a, b) => {
-        if (sortBy === 'last_review') return (b.last_review ? new Date(b.last_review) : 0) - (a.last_review ? new Date(a.last_review) : 0);
-        if (sortBy === 'price_asc') return parsePrice(a.price) - parsePrice(b.price);
-        if (sortBy === 'number_of_reviews') return (b.number_of_reviews || 0) - (a.number_of_reviews || 0);
-        if (sortBy === 'host_name') return (a.host_name || '').localeCompare(b.host_name || '');
-        return (b.availability_365 || 0) - (a.availability_365 || 0);
-    });
+    const residentName = residentNameInput.value;
+    
+    // Hvis vi er i apartment mode, beregn score for hver listing
+    if (currentMode === 'apartment' && selectedBBRData) {
+        nearbyListings.forEach(l => {
+            l.current_match_score = calculateApartmentMatchScore(l, selectedBBRData, residentName);
+        });
+        // Sortér efter score i apartment mode som standard
+        nearbyListings.sort((a, b) => (b.current_match_score || 0) - (a.current_match_score || 0));
+    } else {
+        nearbyListings.sort((a, b) => {
+            if (sortBy === 'last_review') return (b.last_review ? new Date(b.last_review) : 0) - (a.last_review ? new Date(a.last_review) : 0);
+            if (sortBy === 'price_asc') return parsePrice(a.price) - parsePrice(b.price);
+            if (sortBy === 'number_of_reviews') return (b.number_of_reviews || 0) - (a.number_of_reviews || 0);
+            if (sortBy === 'host_name') return (a.host_name || '').localeCompare(b.host_name || '');
+            return (b.availability_365 || 0) - (a.availability_365 || 0);
+        });
+    }
 
     statusMessage.textContent = `Fundet ${nearbyListings.length} lejemål inden for radius.`;
     nearbyListings.forEach(listing => {
-        const marker = createMarker(listing);
+        const score = currentMode === 'apartment' ? listing.current_match_score : null;
+        const color = score !== null ? getScoreColor(score) : 'blue';
+        const marker = createMarker(listing, color, score);
         listingMarkers.addLayer(marker);
+        
         const item = document.createElement('div');
         item.className = 'listing-item';
-        item.innerHTML = `<h3>${listing.name || 'Airbnb'}</h3><p style="font-weight: bold; color: #555;">Vært: ${listing.host_name || 'Ukendt'}</p><p>${listing.room_type} • ${listing.number_of_reviews} anm.</p><span class="price">${listing.price || '0'} DKK / nat</span>`;
+        
+        let scoreTag = "";
+        if (score !== null) {
+            scoreTag = `<div style="float:right; background:${getScoreColor(score)}; color:white; padding:2px 6px; border-radius:4px; font-size:10px;">${score}% match</div>`;
+        }
+
+        item.innerHTML = `
+            ${scoreTag}
+            <h3>${listing.name || 'Airbnb'}</h3>
+            <p style="font-weight: bold; color: #555;">Vært: ${listing.host_name || 'Ukendt'}</p>
+            <p>${listing.room_type} • ${listing.number_of_reviews} anm.</p>
+            <span class="price">${listing.price || '0'} DKK / nat</span>
+        `;
         item.onclick = () => { map.setView([listing.latitude, listing.longitude], 18); marker.openPopup(); };
         item.onmouseenter = () => showPreview(listing.picture_url);
         item.onmouseleave = () => hidePreview();
         listingList.appendChild(item);
     });
+}
+
+// Tilføj listener til beboernavn
+residentNameInput.addEventListener('input', debounce(() => {
+    if (currentMode === 'apartment' && currentSearchCoords) filterListings();
+}, 500));
+
+// Hjælpefunktion til lejlighedsmatch (hvis ikke allerede tilføjet)
+function calculateApartmentMatchScore(airbnb, bbrData, residentName) {
+    let score = 0;
+    const hostName = (airbnb.host_name || '').toLowerCase();
+    const searchName = (residentName || '').toLowerCase();
+
+    // 1. Navne match (Vægt: 50 pts)
+    if (searchName && hostName) {
+        if (hostName.includes(searchName) || searchName.includes(hostName)) {
+            score += 50;
+        }
+    }
+
+    // 2. Etage/Side Match via tekst (Vægt: 50 pts)
+    if (bbrData.floor || bbrData.door) {
+        const floorStr = (bbrData.floor || '').toLowerCase();
+        const doorStr = (bbrData.door || '').toLowerCase();
+        
+        const textToSearch = (airbnb.name || "").toLowerCase();
+        
+        // Simpel søgning i titlen. Hvis vi havde beskrivelsen, ville vi søge i den her.
+        if (floorStr && textToSearch.includes(floorStr)) score += 25;
+        if (doorStr && (textToSearch.includes(doorStr) || textToSearch.includes(doorStr.replace('.', '')))) score += 25;
+    }
+
+    return score;
 }
 
 function createMarker(listing, color = 'blue', score = null) {
@@ -422,8 +513,12 @@ function debounce(func, wait) {
 const handleSearch = async (e) => {
     const query = e.target.value;
     if (query.length < 3) { resultsContainer.style.display = 'none'; return; }
+    
+    // Skift endpoint baseret på mode: 'adgangsadresser' (ejendom) vs 'adresser' (lejlighed)
+    const endpoint = currentMode === 'property' ? 'adgangsadresser' : 'adresser';
+    
     try {
-        const response = await fetch(`https://api.dataforsyningen.dk/adgangsadresser/autocomplete?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`https://api.dataforsyningen.dk/${endpoint}/autocomplete?q=${encodeURIComponent(query)}`);
         currentResults = await response.json();
         displayAutocompleteResults(currentResults);
     } catch (error) { console.error("API Fejl:", error); }
@@ -462,10 +557,38 @@ function displayAutocompleteResults(data) {
 async function selectAddress(item) {
     searchInput.value = item.tekst;
     resultsContainer.style.display = 'none';
-    const response = await fetch(item.adgangsadresse.href);
+    
+    // Brug det korrekte href (adresse eller adgangsadresse)
+    const href = item.adgangsadresse ? item.adgangsadresse.href : item.adresse.href;
+    const response = await fetch(href);
     const data = await response.json();
-    const [lon, lat] = data.adgangspunkt.koordinater;
+    
+    // Find koordinater (for lejligheder skal vi ofte et niveau dybere til adgangsadressen)
+    let lon, lat;
+    if (data.adgangsadresse) {
+        [lon, lat] = data.adgangsadresse.adgangspunkt.koordinater;
+    } else {
+        [lon, lat] = data.adgangspunkt.koordinater;
+    }
+    
     currentSearchCoords = [lat, lon];
+    
+    if (currentMode === 'apartment') {
+        // Opdater BBR info visning
+        bbrInfoBox.innerHTML = `
+            <div style="width:100%">
+                <h4 style="margin:0 0 5px 0;">Valgt Lejlighed</h4>
+                <p style="margin:2px 0;">Etage: <span class="bbr-highlight">${data.etage || 'st'}</span> • Side/Dør: <span class="bbr-highlight">${data.dør || '-'}</span></p>
+                <p style="font-size:11px; color:#999; margin:0;">DAR-ID: ${data.id}</p>
+            </div>
+        `;
+        selectedBBRData = {
+            floor: data.etage,
+            door: data.dør,
+            id: data.id
+        };
+    }
+    
     processNewLocation(lat, lon);
 }
 

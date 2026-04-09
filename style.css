@@ -10,103 +10,129 @@ body {
     background-color: #f0f2f5;
 }
 
+/* Navigation / Mode Selector */
+#mode-selector {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    padding: 15px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    z-index: 1001;
+}
+
+.mode-btn {
+    padding: 10px 25px;
+    border: 2px solid #e0e0e0;
+    background: #f8f9fa;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    font-size: 15px;
+}
+
+.mode-btn.active {
+    background: #ff385c;
+    color: white;
+    border-color: #ff385c;
+    box-shadow: 0 4px 10px rgba(255, 56, 92, 0.2);
+}
+
+.mode-btn:hover:not(.active) {
+    background: #eee;
+    border-color: #ccc;
+}
+
 #controls {
     padding: 15px 30px;
     background: white;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    display: grid;
-    grid-template-columns: auto 400px 200px 1fr auto; /* Tilføjet auto kolonne til start */
-    gap: 30px; /* Reduceret gap lidt for at give plads */
-    align-items: center;
+    display: flex; /* Ændret fra grid til flex for bedre kontrol */
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: flex-start;
     z-index: 1000;
 }
 
-#dataset-container {
-    display: flex;
-    flex-direction: column;
-}
-
-#dataset-container label {
-    font-size: 12px;
-    font-weight: bold;
-    color: #666;
-    margin-bottom: 3px;
-}
-
-#dataset-select {
-    padding: 8px;
-    border-radius: 6px;
-    border: 2px solid #e0e0e0;
-    outline: none;
-    cursor: pointer;
+#dataset-container, #radius-container {
+    min-width: 150px;
 }
 
 #search-container {
     position: relative;
-    width: 400px;
+    flex-grow: 1;
+    max-width: 500px;
 }
 
-#address-search {
+/* Apartment Fields */
+#apartment-fields {
+    background: #fdfdfd;
+    padding: 15px;
+    border-radius: 12px;
+    border: 2px solid #f0f0f0;
+    flex-basis: 100%; /* Fylder hele rækken i flex layout */
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.input-group {
+    min-width: 250px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #444;
+}
+
+.input-group input {
     width: 100%;
-    padding: 12px 15px;
-    font-size: 16px;
+    padding: 10px 15px;
     border: 2px solid #e0e0e0;
     border-radius: 8px;
+    font-size: 14px;
     outline: none;
-    transition: border-color 0.3s;
-    box-sizing: border-box;
 }
 
-#address-search:focus {
+.input-group input:focus {
     border-color: #007bff;
 }
 
-#autocomplete-results {
-    position: absolute;
-    top: calc(100% + 5px);
-    left: 0;
-    right: 0;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-    max-height: 250px;
-    overflow-y: auto;
-    display: none;
-    z-index: 2000;
-}
-
-.autocomplete-item {
-    padding: 12px 15px;
-    cursor: pointer;
-    border-bottom: 1px solid #f0f0f0;
-}
-
-.autocomplete-item:hover, .autocomplete-item.active {
-    background: #f8f9fa;
-    color: #007bff;
-}
-
-#radius-container {
-    display: flex;
-    flex-direction: column;
-    width: 200px;
-}
-
-#radius-container label {
+.info-box {
+    background: #fff;
+    border: 2px solid #e0e0e0;
+    padding: 12px 20px;
+    border-radius: 10px;
     font-size: 14px;
-    margin-bottom: 5px;
-    font-weight: bold;
+    line-height: 1.4;
+    flex-grow: 1;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    color: #666;
 }
 
-#radius-slider {
-    width: 100%;
-    cursor: pointer;
+.bbr-highlight {
+    color: #ff385c;
+    font-weight: bold;
+    margin: 0 5px;
+}
+
+#action-buttons {
+    display: flex;
+    align-items: center;
 }
 
 #status-message {
+    flex-grow: 1;
     font-size: 14px;
     color: #666;
     font-style: italic;
+    align-self: center;
 }
 
 #download-btn {
@@ -117,6 +143,11 @@ body {
     border-radius: 8px;
     font-weight: bold;
     cursor: pointer;
+    transition: background 0.3s;
+}
+
+#download-btn:hover {
+    background: #218838;
 }
 
 #main-content {

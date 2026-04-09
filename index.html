@@ -16,6 +16,12 @@
 </head>
 <body>
 
+    <!-- Navigation / Mode Selector -->
+    <div id="mode-selector">
+        <button id="mode-property" class="mode-btn active">Søg på ejendom</button>
+        <button id="mode-apartment" class="mode-btn">Søg på specifik lejlighed</button>
+    </div>
+
     <!-- Sektion til søgning og knapper -->
     <div id="controls">
         <div id="dataset-container">
@@ -28,8 +34,19 @@
         </div>
 
         <div id="search-container">
-            <input type="text" id="address-search" placeholder="Søg efter en adresse i København..." autocomplete="off">
+            <input type="text" id="address-search" placeholder="Søg efter en adresse..." autocomplete="off">
             <div id="autocomplete-results"></div>
+        </div>
+
+        <!-- Specifikke felter til lejlighedssøgning (skjult som standard) -->
+        <div id="apartment-fields" style="display: none;">
+            <div class="input-group">
+                <label for="resident-name">Beboerens navn:</label>
+                <input type="text" id="resident-name" placeholder="F.eks. Jensen">
+            </div>
+            <div id="bbr-info-box" class="info-box">
+                <p>Vælg en lejlighed for at se BBR-data (Værelser, Toiletter, Areal)...</p>
+            </div>
         </div>
         
         <div id="radius-container">
@@ -39,7 +56,9 @@
 
         <div id="status-message">Indtast en adresse for at starte</div>
         
-        <button id="download-btn">Download CSV</button>
+        <div id="action-buttons">
+            <button id="download-btn">Download CSV</button>
+        </div>
     </div>
 
     <!-- Main content område med sidepanel og kort -->
