@@ -63,3 +63,6 @@ Højreklik på `index.html` og vælg **"Open with Live Server"**.
 ## 📊 Format for lejerliste
 CSV-filen skal være **semikolon-separeret ( ; )** og indeholde:
 `Navn`, `Lejernr.`, `Adresse`, `Areal`, `Rum`.
+
+## 🔮 Fremtidig Udvikling
+Der arbejdes på et separat Python-projekt (`airbnb_python/`) til avanceret efterforskning af enkelte lejligheder. Når match-motoren i Python er færdigudviklet (inkl. automatiseret analyse af reviews og detaljerede beskrivelser), er planen at porte denne avancerede logik direkte over i denne webapplikation.

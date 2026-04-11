@@ -14,6 +14,7 @@ Dette projekt er en interaktiv webapplikation til analyse af Airbnb-data i Danma
         3. **Areal (20 pts):** Matcher baseret på kapacitet (ca. 25m² pr. person).
     - **Bevaring af rækkefølge:** Listen over matches følger den originale rækkefølge fra lejerlisten.
 - **Eksport:** Mulighed for at downloade berigede lejerlister som CSV. Match-kolonner (`airbnb_link_N` og `match_score_N`) tilføjes til sidst i filen for at bevare de originale data forrest.
+- **Fremtidig Integration:** Implementering af den avancerede match-motor fra det separate Python-projekt, når denne er færdigudviklet (inkl. analyse af reviews og descriptions).
 
 ## Teknologier
 - **Frontend:** Vanilla JavaScript (ES6+), HTML5, CSS3.

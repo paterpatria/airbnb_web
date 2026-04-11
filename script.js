@@ -412,16 +412,35 @@ function calculateApartmentMatchScore(airbnb, bbrData, residentName) {
         }
     }
 
-    // 2. Etage/Side Match via tekst (Vægt: 50 pts)
+    // 2. Etage/Side Match via avanceret tekst-analyse (Vægt: 50 pts)
     if (bbrData.floor || bbrData.door) {
         const floorStr = (bbrData.floor || '').toLowerCase();
         const doorStr = (bbrData.door || '').toLowerCase();
+        const title = (airbnb.name || "").toLowerCase();
         
-        const textToSearch = (airbnb.name || "").toLowerCase();
-        
-        // Simpel søgning i titlen. Hvis vi havde beskrivelsen, ville vi søge i den her.
-        if (floorStr && textToSearch.includes(floorStr)) score += 25;
-        if (doorStr && (textToSearch.includes(doorStr) || textToSearch.includes(doorStr.replace('.', '')))) score += 25;
+        // Lav en liste over varianter at søge efter
+        // F.eks. hvis etage er 'st', søg efter 'st', 'stuen', 'ground floor'
+        let floorMatches = false;
+        if (floorStr === 'st') {
+            if (title.includes('st') || title.includes('stuen') || title.includes('ground')) floorMatches = true;
+        } else if (floorStr) {
+            // Søg efter tallet efterfulgt af punktum eller 'sal' (f.eks. '2.' eller '2. sal')
+            const floorRegex = new RegExp(`\\b${floorStr}(\\.|\\s?sal|nd|rd|th|st)\\b`, 'i');
+            if (floorRegex.test(title)) floorMatches = true;
+        }
+
+        let doorMatches = false;
+        if (doorStr) {
+            // Søg efter 'tv', 'th', 'mf' eller engelske modstykker
+            const sideMap = { 'tv': ['tv', 'left'], 'th': ['th', 'right'], 'mf': ['mf', 'middle'] };
+            const searchTerms = sideMap[doorStr] || [doorStr];
+            searchTerms.forEach(term => {
+                if (title.includes(term)) doorMatches = true;
+            });
+        }
+
+        if (floorMatches) score += 25;
+        if (doorMatches) score += 25;
     }
 
     return score;
