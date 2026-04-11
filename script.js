@@ -13,7 +13,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 // Globale tilstande
-let currentMode = 'property'; // 'property' eller 'apartment'
+const DATA_FORSYNINGEN_TOKEN = 'b9b2fba1efc35c42ab1cd4df3e6aadd8'; // Indsæt din API-nøgle her hvis nødvendigt
+let currentMode = 'property'; 
 let selectedBBRData = null;
 let allListings = [];
 let nearbyListings = [];
@@ -525,19 +526,40 @@ const handleSearch = async (e) => {
 };
 
 searchInput.addEventListener('input', debounce(handleSearch, 300));
+
 searchInput.addEventListener('keydown', (e) => {
     const items = resultsContainer.getElementsByClassName('autocomplete-item');
     if (items.length === 0) return;
-    if (e.key === 'ArrowDown') { e.preventDefault(); focusedIndex = (focusedIndex + 1) % items.length; updateFocus(items); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); focusedIndex = (focusedIndex - 1 + items.length) % items.length; updateFocus(items); }
-    else if (e.key === 'Enter') { e.preventDefault(); if (focusedIndex > -1) selectAddress(currentResults[focusedIndex]); }
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusedIndex = (focusedIndex + 1) % items.length;
+        updateFocus(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusedIndex = (focusedIndex - 1 + items.length) % items.length;
+        updateFocus(items);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (focusedIndex > -1) {
+            selectAddress(currentResults[focusedIndex]);
+        } else if (items.length > 0) {
+            // Vælg den øverste hvis intet er fokuseret
+            selectAddress(currentResults[0]);
+        }
+    } else if (e.key === 'Escape') {
+        resultsContainer.style.display = 'none';
+    }
 });
 
 function updateFocus(items) {
-    for (let i = 0; i < items.length; i++) items[i].classList.remove('active');
+    for (let i = 0; i < items.length; i++) {
+        items[i].classList.remove('active');
+    }
     if (focusedIndex > -1) {
         items[focusedIndex].classList.add('active');
-        items[focusedIndex].scrollIntoView({ block: 'nearest' });
+        // Sikre at det fokuserede element er synligt i dropdown (scroll)
+        items[focusedIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 }
 
@@ -554,42 +576,92 @@ function displayAutocompleteResults(data) {
     resultsContainer.style.display = 'block';
 }
 
+function updateBBRDisplay(rooms = '?', toilets = '?', area = '?') {
+    bbrInfoBox.innerHTML = `
+        <div style="width:100%; display: flex; justify-content: space-around; align-items: center; text-align: center;">
+            <div>
+                <span style="display:block; font-size:10px; color:#888; text-transform:uppercase;">Værelser</span>
+                <input type="text" class="bbr-editable" value="${rooms}" onchange="manualBBRChange('rooms', this.value)">
+            </div>
+            <div style="border-left: 1px solid #eee; border-right: 1px solid #eee; padding: 0 20px;">
+                <span style="display:block; font-size:10px; color:#888; text-transform:uppercase;">Toiletter</span>
+                <input type="text" class="bbr-editable" value="${toilets}" onchange="manualBBRChange('toilets', this.value)">
+            </div>
+            <div>
+                <span style="display:block; font-size:10px; color:#888; text-transform:uppercase;">Areal</span>
+                <div style="display:flex; align-items:center;">
+                    <input type="text" class="bbr-editable" value="${area}" onchange="manualBBRChange('area', this.value)">
+                    <span style="font-size:12px; font-weight:bold; color:#ff385c;">m²</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+window.manualBBRChange = (field, value) => {
+    if (!selectedBBRData) selectedBBRData = {};
+    selectedBBRData[field] = value === '?' ? null : value;
+    filterListings(); // Genberegn match med det samme
+};
+
 async function selectAddress(item) {
     searchInput.value = item.tekst;
     resultsContainer.style.display = 'none';
     
-    // Brug det korrekte href (adresse eller adgangsadresse)
-    const href = item.adgangsadresse ? item.adgangsadresse.href : item.adresse.href;
-    const response = await fetch(href);
-    const data = await response.json();
+    // Vi bruger DAWA's primære adresse-endpoint med struktur=nestet
+    // Dette er den mest CORS-venlige måde at få fat i dataene på.
+    const url = `https://api.dataforsyningen.dk/adresser/${item.adresse ? item.adresse.id : item.id}?struktur=nestet${DATA_FORSYNINGEN_TOKEN ? '&token=' + DATA_FORSYNINGEN_TOKEN : ''}`;
     
-    // Find koordinater (for lejligheder skal vi ofte et niveau dybere til adgangsadressen)
-    let lon, lat;
-    if (data.adgangsadresse) {
-        [lon, lat] = data.adgangsadresse.adgangspunkt.koordinater;
-    } else {
-        [lon, lat] = data.adgangspunkt.koordinater;
+    try {
+        statusMessage.textContent = "Henter data...";
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Kunne ikke kontakte DAWA");
+        const data = await response.json();
+        
+        // Find koordinater (altid i adgangsadressen)
+        let lon, lat;
+        if (data.adgangsadresse && data.adgangsadresse.adgangspunkt) {
+            [lon, lat] = data.adgangsadresse.adgangspunkt.koordinater;
+        } else {
+            throw new Error("Ingen koordinater fundet.");
+        }
+        
+        currentSearchCoords = [lat, lon];
+        
+        if (currentMode === 'apartment') {
+            statusMessage.textContent = "Henter BBR-info...";
+            updateBBRDisplay(); // Vis placeholders
+            selectedBBRData = { floor: data.etage, door: data.dør, id: data.id };
+
+            // Prøv at hente BBR data via en stabil proxy
+            try {
+                const bbrUrl = `https://api.dataforsyningen.dk/bbr/enheder?adresseid=${data.id}${DATA_FORSYNINGEN_TOKEN ? '&token=' + DATA_FORSYNINGEN_TOKEN : ''}`;
+                const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(bbrUrl)}`;
+                
+                const bbrResp = await fetch(proxyUrl);
+                if (bbrResp.ok) {
+                    const bbrList = await bbrResp.json();
+                    const bbr = bbrList[0] || {};
+                    selectedBBRData.rooms = bbr.beboelse_rum || bbr.antal_vaerelser || '?';
+                    selectedBBRData.area = bbr.beboelse_areal || bbr.areal_beboelse || '?';
+                    selectedBBRData.toilets = bbr.antal_vandskyllede_toiletter || bbr.antal_badevaerelser || '?';
+                    updateBBRDisplay(selectedBBRData.rooms, selectedBBRData.toilets, selectedBBRData.area);
+                    statusMessage.textContent = "BBR hentet automatisk.";
+                } else {
+                    statusMessage.textContent = "Browser blokerer BBR. Indtast venligst manuelt ovenfor.";
+                }
+            } catch (bbrErr) {
+                console.warn("BBR del fejlede (CORS).");
+                statusMessage.textContent = "Indtast venligst BBR-data manuelt i felterne.";
+            }
+            filterListings();
+        }
+        
+        processNewLocation(lat, lon);
+    } catch (e) {
+        console.error("Fetch Error:", e);
+        statusMessage.textContent = "Fejl ved hentning af adresse-detaljer.";
     }
-    
-    currentSearchCoords = [lat, lon];
-    
-    if (currentMode === 'apartment') {
-        // Opdater BBR info visning
-        bbrInfoBox.innerHTML = `
-            <div style="width:100%">
-                <h4 style="margin:0 0 5px 0;">Valgt Lejlighed</h4>
-                <p style="margin:2px 0;">Etage: <span class="bbr-highlight">${data.etage || 'st'}</span> • Side/Dør: <span class="bbr-highlight">${data.dør || '-'}</span></p>
-                <p style="font-size:11px; color:#999; margin:0;">DAR-ID: ${data.id}</p>
-            </div>
-        `;
-        selectedBBRData = {
-            floor: data.etage,
-            door: data.dør,
-            id: data.id
-        };
-    }
-    
-    processNewLocation(lat, lon);
 }
 
 function processNewLocation(lat, lon) {

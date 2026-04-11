@@ -65,20 +65,78 @@ body {
     max-width: 500px;
 }
 
+#address-search {
+    width: 100%;
+    padding: 12px 15px;
+    font-size: 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    outline: none;
+    transition: all 0.3s;
+    box-sizing: border-box;
+}
+
+#address-search:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+#autocomplete-results {
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 0;
+    right: 0;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    max-height: 350px;
+    overflow-y: auto;
+    display: none;
+    z-index: 2000;
+    border: 1px solid #eee;
+}
+
+.autocomplete-item {
+    padding: 12px 20px;
+    cursor: pointer;
+    border-bottom: 1px solid #f8f8f8;
+    font-size: 14px;
+    color: #333;
+    transition: all 0.2s ease;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-item:hover, .autocomplete-item.active {
+    background: #f0f7ff;
+    color: #007bff;
+}
+
+.autocomplete-item.active {
+    border-left: 4px solid #007bff;
+    background: #f0f7ff;
+}
+
 /* Apartment Fields */
 #apartment-fields {
     background: #fdfdfd;
     padding: 15px;
     border-radius: 12px;
     border: 2px solid #f0f0f0;
-    flex-basis: 100%; /* Fylder hele rækken i flex layout */
+    flex-basis: 100%;
     display: flex;
     gap: 20px;
-    align-items: center;
+    align-items: stretch; /* Gør dem lige høje */
+    margin-bottom: 5px;
 }
 
 .input-group {
-    min-width: 250px;
+    flex: 0 0 300px; /* Fast bredde til navne-input */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .input-group label {
@@ -91,29 +149,43 @@ body {
 
 .input-group input {
     width: 100%;
-    padding: 10px 15px;
+    padding: 12px 15px;
     border: 2px solid #e0e0e0;
     border-radius: 8px;
     font-size: 14px;
     outline: none;
-}
-
-.input-group input:focus {
-    border-color: #007bff;
+    box-sizing: border-box;
 }
 
 .info-box {
     background: #fff;
     border: 2px solid #e0e0e0;
-    padding: 12px 20px;
+    padding: 10px 20px;
     border-radius: 10px;
     font-size: 14px;
     line-height: 1.4;
     flex-grow: 1;
-    min-height: 40px;
     display: flex;
     align-items: center;
+    justify-content: space-around;
     color: #666;
+}
+
+.bbr-editable {
+    border: 1px solid transparent;
+    background: transparent;
+    width: 40px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: bold;
+    color: #ff385c;
+    outline: none;
+    cursor: pointer;
+}
+
+.bbr-editable:hover, .bbr-editable:focus {
+    border-bottom: 1px dashed #ff385c;
+    background: #fff5f6;
 }
 
 .bbr-highlight {
